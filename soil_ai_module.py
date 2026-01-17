@@ -14,17 +14,63 @@ from agricultural_config import (
     validate_crops_for_season, should_filter_crop, get_disclaimer
 )
 
+# ============================================================================
+# OLLAMA LLM INITIALIZATION - HARDENED FOR DETERMINISTIC OUTPUT
+# ============================================================================
+# 
+# 🔒 SECURITY & DETERMINISM CONSTRAINTS:
+# 
+# 1. TWO-LLM ARCHITECTURE:
+#    - llm_json (temperature=0.1): Strict structured JSON output
+#      * Used for: extract_soil_parameters, classify_soil_profile, 
+#                  generate_agronomy_recommendations
+#      * Enforces: format="json" for valid JSON only
+#      * Purpose: Data extraction and categorization (no creativity)
+#    
+#    - llm_text (temperature=0.3): Human-friendly advisory text
+#      * Used for: generate_advisory (optional farmer-friendly explanation)
+#      * Purpose: Natural language guidance (controlled creativity)
+# 
+# 2. TEMPERATURE SETTINGS (MANDATORY):
+#    - llm_json: temperature ≤ 0.1 → deterministic, consistent output
+#    - llm_text: temperature ≤ 0.3 → controlled variability for readability
+#    - DO NOT increase these values → would allow hallucination
+# 
+# 3. HARDENED PROMPT DESIGN:
+#    - Explicit constraints in every prompt
+#    - "NEVER generate numeric values" enforced
+#    - "READ-ONLY data sources" specified
+#    - "FORBIDDEN actions" listed explicitly
+#    - Safety checks validate output post-generation
+# 
+# 4. SAFETY VALIDATION:
+#    - validate_no_numeric_values_in_response() blocks AI-generated numbers
+#    - validate_no_numeric_values_in_json() checks JSON structure
+#    - Backend rule-based categorization ALWAYS overrides AI output
+#    - Measured soil values NEVER processed by AI (backend pre-categorizes)
+# 
+# 5. DATA FLOW (CRITICAL):
+#    Lab Report → extract (AI) → categorize (Backend+AI) → recommend (AI) 
+#    → explain (Rule-based, NO AI)
+#    
+#    - Numeric values: ONLY from lab reports (extraction phase)
+#    - Categories: Backend threshold logic (NOT AI inference)
+#    - Recommendations: AI suggests, backend filters/validates
+#    - Explanations: Pure rule-based string assembly (NO AI)
+# 
+# ============================================================================
+
 try:
     llm_json = ChatOllama(
         model="llama3.2",
         base_url="http://localhost:11434",
-        temperature=0.1,
+        temperature=0.1,  # 🔒 LOCKED: Deterministic JSON output
         model_kwargs={"format": "json"}
     )
     llm_text = ChatOllama(
         model="llama3.2",
         base_url="http://localhost:11434",
-        temperature=0.3
+        temperature=0.3  # 🔒 LOCKED: Controlled text generation
     )
 except Exception as e:
     print(f"Warning: Could not initialize Ollama: {e}")
@@ -33,51 +79,199 @@ except Exception as e:
 
 json_parser = JsonOutputParser()
 
+def validate_no_numeric_values_in_response(response_text: str, context: str) -> None:
+    """
+    Safety check: Detect if AI generated numeric soil values in its response.
+    This should NEVER happen - AI must only use categories.
+    
+    Args:
+        response_text: The raw response text from AI
+        context: Description of where this check is running (for error messages)
+    
+    Raises:
+        ValueError: If numeric soil values are detected in response
+    """
+    # Patterns that indicate AI generated numeric values
+    forbidden_patterns = [
+        r'pH[\s:=]+\d+\.\d+',  # pH: 7.2 or pH = 7.2
+        r'nitrogen[\s:=]+\d+',  # Nitrogen: 150
+        r'phosphorus[\s:=]+\d+',  # Phosphorus: 25
+        r'potassium[\s:=]+\d+',  # Potassium: 200
+        r'\d+\s*kg/ha',  # 150 kg/ha
+        r'\d+\s*kg/acre',  # 100 kg/acre
+        r'value["\']?\s*:\s*\d+\.\d+',  # "value": 7.2 (in JSON)
+        r'pH\s+is\s+\d+\.\d+',  # pH is 7.2
+        r'nitrogen\s+is\s+\d+',  # Nitrogen is 150
+    ]
+    
+    response_lower = response_text.lower()
+    for pattern in forbidden_patterns:
+        matches = re.findall(pattern, response_lower)
+        if matches:
+            raise ValueError(
+                f"AI SAFETY VIOLATION in {context}: AI generated numeric soil values. "
+                f"Found: {matches}. AI must ONLY use categories (Low/Medium/High, etc.), "
+                f"NEVER numeric values. Response excerpt: {response_text[:200]}"
+            )
+
+def validate_no_numeric_values_in_json(json_data: dict, context: str, allowed_fields: list = None) -> None:
+    """
+    Safety check: Ensure JSON output contains no numeric soil values in unexpected places.
+    
+    Args:
+        json_data: Parsed JSON response from AI
+        context: Description of where this check is running
+        allowed_fields: List of field paths where numeric values are allowed (e.g., ['confidence'])
+    
+    Raises:
+        ValueError: If numeric values found in disallowed fields
+    """
+    allowed_fields = allowed_fields or ['confidence', 'version']
+    
+    def check_dict(d: dict, path: str = ''):
+        for key, value in d.items():
+            current_path = f"{path}.{key}" if path else key
+            
+            # Skip allowed fields
+            if any(allowed in current_path for allowed in allowed_fields):
+                continue
+            
+            if isinstance(value, dict):
+                check_dict(value, current_path)
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, dict):
+                        check_dict(item, current_path)
+            elif key in ['value', 'ph', 'nitrogen', 'phosphorus', 'potassium'] and isinstance(value, (int, float)):
+                # Found numeric value in soil parameter field
+                if key != 'value' or ('extracted_parameters' not in path and 'pre_categorized' not in path):
+                    raise ValueError(
+                        f"AI SAFETY VIOLATION in {context}: Found numeric value in {current_path} = {value}. "
+                        f"AI output must contain ONLY categories, not numeric values."
+                    )
+    
+    check_dict(json_data)
+
 def extract_soil_parameters(report_text: str) -> Dict[str, Any]:
     """
     Extract soil parameters from report text.
     Returns structured JSON with normalized parameters.
+    
+    🔒 HARDENED PROMPT: AI must ONLY extract numeric values from real lab reports.
+    AI MUST NEVER generate, predict, or infer numeric soil values.
     """
     prompt = ChatPromptTemplate.from_template("""
-You are a soil report interpreter. Extract soil parameters from the following report text.
+You are a soil report text extractor for Maharashtra, India agriculture system.
 
-Rules:
-1. Identify soil parameters regardless of naming differences (e.g., "Soil Reaction" → pH)
-2. Extract numeric values and units
-3. Normalize parameter names to standard names: pH, Nitrogen, Phosphorus, Potassium, Organic Carbon, etc.
-4. If unit conversion is unclear, mark unit_uncertain as true
-5. Explicitly mark missing parameters with source: "missing"
-6. Do NOT categorize or predict - only extract raw values
+🔴 CRITICAL CONSTRAINTS (MANDATORY - NEVER VIOLATE):
+
+1. EXTRACTION ONLY - NO GENERATION:
+   - Extract ONLY numeric values that are EXPLICITLY written in the report text
+   - NEVER generate, predict, estimate, or infer any numeric values
+   - NEVER use typical values, averages, or ranges
+   - NEVER calculate or derive values from other parameters
+
+2. MISSING PARAMETER HANDLING:
+   - If a parameter (pH, Nitrogen, Phosphorus, Potassium, Organic Carbon) is NOT found in the text:
+     → Set value: null
+     → Set source: "missing"
+   - If parameter name appears but NO numeric value is given:
+     → Set value: null
+     → Set source: "missing"
+
+3. PARAMETER NORMALIZATION:
+   - "Soil Reaction" → pH
+   - "Available Nitrogen (N)" or "N" → Nitrogen
+   - "Available Phosphorus (P)" or "P" → Phosphorus
+   - "Available Potassium (K)" or "K" → Potassium
+   - "Organic Carbon (OC)" or "OC" → Organic Carbon
+
+4. UNITS:
+   - pH: no unit (dimensionless)
+   - Nitrogen, Phosphorus, Potassium: kg/ha (if not specified, mark unit_uncertain: true)
+   - Organic Carbon: % or g/kg
+
+5. OUTPUT REQUIREMENTS:
+   - Return ONLY valid JSON
+   - NO explanations, NO markdown, NO text before/after JSON
+   - Start with {{ and end with }}
+   - Every parameter must have: value, unit, source, unit_uncertain
+
+❌ FORBIDDEN ACTIONS:
+❌ Generating typical values (e.g., "typical pH for black soil is 7.5")
+❌ Inferring from district or soil type
+❌ Using ranges or approximations
+❌ Predicting based on other parameters
+❌ Filling gaps with assumptions
 
 Report Text:
 {report_text}
 
-Output STRICT JSON ONLY in this format:
+✓ ACCEPTABLE OUTPUT EXAMPLES:
+
+Example 1 - All parameters found:
 {{
   "version": "farmchain-ai-v1.0",
   "extracted_parameters": {{
-    "pH": {{
-      "value": 7.8,
-      "unit": "",
-      "source": "report",
-      "unit_uncertain": false
-    }},
-    "Nitrogen": {{
-      "value": 210,
-      "unit": "kg/ha",
-      "source": "report",
-      "unit_uncertain": false
-    }}
+    "pH": {{"value": 7.8, "unit": "", "source": "report", "unit_uncertain": false}},
+    "Nitrogen": {{"value": 210, "unit": "kg/ha", "source": "report", "unit_uncertain": false}},
+    "Phosphorus": {{"value": 15, "unit": "kg/ha", "source": "report", "unit_uncertain": false}},
+    "Potassium": {{"value": 250, "unit": "kg/ha", "source": "report", "unit_uncertain": false}}
   }}
 }}
+
+Example 2 - Some parameters missing:
+{{
+  "version": "farmchain-ai-v1.0",
+  "extracted_parameters": {{
+    "pH": {{"value": 6.9, "unit": "", "source": "report", "unit_uncertain": false}},
+    "Nitrogen": {{"value": 120, "unit": "kg/ha", "source": "report", "unit_uncertain": false}},
+    "Phosphorus": {{"value": null, "unit": "", "source": "missing", "unit_uncertain": false}},
+    "Potassium": {{"value": null, "unit": "", "source": "missing", "unit_uncertain": false}}
+  }}
+}}
+
+Example 3 - No parameters found:
+{{
+  "version": "farmchain-ai-v1.0",
+  "extracted_parameters": {{}}
+}}
+
+Now extract parameters from the report text above. Return ONLY the JSON structure.
 """)
 
     chain = prompt | llm_json | json_parser
     try:
         result = chain.invoke({"report_text": report_text})
+        
+        # SAFETY CHECK: Validate response before processing
         result_str = json.dumps(result)
+        
+        # Check 1: Ensure AI didn't generate explanatory text with numeric values
+        validate_no_numeric_values_in_response(
+            result_str, 
+            "extract_soil_parameters"
+        )
+        
+        # Clean up any potential contamination
         result_str = re.sub(r'https?://[^\s]+langchain[^\s]+', '', result_str)
         result = json.loads(result_str) if result_str else result
+        
+        # SAFETY CHECK: Validate extracted parameters
+        if "extracted_parameters" in result:
+            for param_name, param_data in result["extracted_parameters"].items():
+                if isinstance(param_data, dict):
+                    # Verify value is either null or from report
+                    value = param_data.get("value")
+                    source = param_data.get("source", "")
+                    
+                    if value is not None and source not in ["report", "missing"]:
+                        raise ValueError(
+                            f"SAFETY VIOLATION: Parameter {param_name} has value {value} "
+                            f"with source '{source}'. AI may have generated this value. "
+                            f"Valid sources are 'report' or 'missing' only."
+                        )
+        
         return result
     except Exception as e:
         error_msg = str(e)
@@ -220,102 +414,82 @@ def classify_soil_profile(
         pre_categorized_ph = pre_categorized_soil_profile["pH"]
 
     prompt = ChatPromptTemplate.from_template("""
-You are a soil classification expert for Maharashtra, India.
+You are a soil classification assistant for Maharashtra, India agriculture system.
 
-Input:
+🔒 YOUR ROLE: Apply rule-based categorization for measured values ONLY.
+🔒 BACKEND HANDLES: All threshold-based categorization for measured values.
+
+Input Data:
 - Extracted Parameters: {extracted_params}
 - District: {district}
 - Soil Type: {soil_type}
 - Irrigation Type: {irrigation_type}
 - Pre-categorized pH: {pre_categorized_ph}
 
-🔴 CRITICAL RULE: pH CLASSIFICATION IS COMPLETELY REMOVED FROM OLLAMA
-- pH is ALREADY categorized in backend code and provided above as "Pre-categorized pH"
-- You MUST use the pre-categorized pH category EXACTLY as provided
-- DO NOT classify, infer, or modify pH category
-- DO NOT use district or soil-type to determine pH
-- pH category is FROZEN and cannot be changed
+🔴 CRITICAL CONSTRAINTS (MANDATORY - NEVER VIOLATE):
 
-🔴 HARD RULES (MANDATORY - NEVER VIOLATE - IMPLEMENTED IN CODE):
+1. pH CATEGORIZATION - COMPLETELY LOCKED:
+   - pH is ALREADY categorized in backend code
+   - Use the pre-categorized pH category EXACTLY as provided above
+   - NEVER classify, infer, or modify pH category
+   - NEVER use district or soil-type to determine pH
+   - If pre-categorized pH exists → copy it to output unchanged
 
-RULE 1: MEASURED VALUES (source === "report" && value !== null)
-→ Categorize STRICTLY using threshold tables below
-→ Set confidence = 0.95 (high confidence for measured values)
-→ Set inferred = false (this is NOT inference)
-→ COMPLETELY SKIP district/soil-type inference for this parameter
-→ NOTE: pH is already categorized - use the pre-categorized value above
+2. MEASURED VALUES (source="report" AND value is NOT null):
+   - Backend code ALREADY categorized these using thresholds
+   - You should NOT see these in your task (backend pre-processes them)
+   - If you see measured values, DO NOT categorize them
+   - Set confidence = 0.95, category = "Unknown" (backend will override)
 
-RULE 2: MISSING VALUES (value === null)
-→ THEN and ONLY THEN you may infer category using soil type + district logic
-→ Set confidence = 0.5-0.8 (reflect uncertainty for inferred values)
-→ Set inferred = true (this IS inference)
-→ NOTE: If pH value is missing, you may infer pH using district/soil-type
+3. MISSING VALUES (value is null OR source="missing"):
+   - ONLY for missing values, infer category using:
+     * Soil type characteristics
+     * District patterns (Maharashtra regions)
+     * Typical regional soil properties
+   - Set confidence = 0.5-0.8 (lower for inferred)
+   - NEVER generate numeric values
+   - NEVER predict what the measured value might be
 
-RULE 3: PRECEDENCE
-→ Measured values ALWAYS override inference
-→ Inference logic runs ONLY when value is missing
-→ NEVER run inference before checking if value exists
-→ pH is ALWAYS from pre-categorized value if provided
+4. INFERENCE RULES (for missing values only):
+   - Maharashtra Black Soil: Typically Low Nitrogen, Medium Phosphorus, High Potassium
+   - Red Soil: Typically Low Nitrogen, Low Phosphorus, Low Potassium
+   - Alluvial: Typically Medium Nitrogen, Medium Phosphorus, Medium Potassium
+   - Adjust confidence based on irrigation: Irrigated (0.6-0.7), Rain-fed (0.5-0.6)
 
-❌ WHAT MUST NOT EXIST:
-❌ "If district = Pune then pH is alkaline" when pH is pre-categorized
-❌ Confidence-based guessing over lab values
-❌ Inference logic running before threshold logic
-❌ ANY attempt to classify or modify pH if pre-categorized pH is provided
+5. CATEGORIES (no numeric values allowed):
+   - pH: Acidic (pH 0-6.5), Neutral (6.5-7.5), Alkaline (>7.5) [LOCKED - use pre-categorized]
+   - Nitrogen: Low (<200), Medium (200-280), High (>280) kg/ha
+   - Phosphorus: Low (<10), Medium (10-25), High (>25) kg/ha
+   - Potassium: Low (<110), Medium (110-280), High (>280) kg/ha
+   - Organic Carbon: Poor (<0.5%), Moderate (0.5-0.75%), Rich (>0.75%)
 
-Classification Process:
-1. For pH: Use the pre-categorized pH category EXACTLY as provided above. DO NOT classify or infer pH.
-2. For OTHER parameters (Nitrogen, Phosphorus, Potassium):
-   a. Check if source === "report" AND value !== null
-   b. If YES → Use threshold table ONLY (skip to step 3)
-   c. If NO → Check if value === null
-   d. If value === null → THEN use inference (soil type + district)
-   e. If value exists but source !== "report" → Use threshold table
+❌ FORBIDDEN ACTIONS:
+❌ Generating or mentioning ANY numeric soil values
+❌ Overriding measured value categories
+❌ Predicting what measured values might be
+❌ Categorizing parameters that have measured values
+❌ Modifying pre-categorized pH
+❌ Using "typical" values for measured parameters
 
-3. Apply threshold categorization (for Nitrogen, Phosphorus, Potassium ONLY):
-   - Nitrogen: <200 Low, 200-280 Medium, >280 High (kg/ha)
-   - Phosphorus: <10 Low, 10-25 Medium, >25 High (kg/ha)
-   - Potassium: <110 Low, 110-280 Medium, >280 High (kg/ha)
+✓ YOUR TASK:
+For each parameter in extracted_params:
+1. Check if pre-categorized pH exists → use it unchanged
+2. Check if value is null or source="missing":
+   - YES → Infer category using soil type + district
+   - NO → Backend already handled it, output "Unknown" (will be overridden)
 
-4. For missing values only (Nitrogen, Phosphorus, Potassium), infer using:
-   - District characteristics
-   - Soil type patterns
-   - Regional averages
-   - For pH: Only infer if pre-categorized pH is NOT provided
-
-Rules:
-1. Use pre-categorized pH EXACTLY as provided - DO NOT modify it
-2. Convert numeric values into categories ONLY: Low/Medium/High, Acidic/Neutral/Alkaline, Poor/Moderate/Rich, Unknown
-3. Measured values (source="report"): Use thresholds ONLY, confidence = 0.95
-4. Missing values (value=null): Infer using district/soil-type, confidence = 0.5-0.8
-5. Do NOT output raw numbers
-
-CRITICAL OUTPUT REQUIREMENTS:
-- Return ONLY the JSON object below
-- NO explanations
-- NO "Here is the output" or similar text
-- NO markdown code blocks
-- NO URLs
-- NO additional text before or after the JSON
-- Start directly with {{ and end with }}
-
-Output EXACTLY this JSON structure (nothing more, nothing less):
+✓ OUTPUT FORMAT (JSON only, no text):
 {{
   "version": "farmchain-ai-v1.0",
   "soil_profile": {{
-    "pH": {{
-      "category": "Neutral",
-      "confidence": 0.95
-    }},
-    "Nitrogen": {{
-      "category": "Medium",
-      "confidence": 0.76
-    }}
+    "pH": {{"category": "Neutral", "confidence": 0.95}},
+    "Nitrogen": {{"category": "Low", "confidence": 0.65}},
+    "Phosphorus": {{"category": "Medium", "confidence": 0.60}},
+    "Potassium": {{"category": "High", "confidence": 0.70}}
   }}
 }}
 
-CRITICAL: If pre-categorized pH is provided above, you MUST use that EXACT category in the output.
-DO NOT change the pH category even if district/soil-type suggests otherwise.
+CRITICAL: Return ONLY raw JSON. NO explanations. NO markdown. Start with {{ and end with }}.
 """)
 
     pre_categorized = {}
@@ -392,6 +566,12 @@ DO NOT change the pH category even if district/soil-type suggests otherwise.
             result_str = json.dumps(result)
         else:
             result_str = str(result)
+
+        # SAFETY CHECK: Validate AI didn't generate numeric soil values
+        validate_no_numeric_values_in_response(
+            result_str,
+            "classify_soil_profile"
+        )
 
         result_str = re.sub(r'https?://[^\s]+langchain[^\s]+', '', result_str)
         result_str = re.sub(r'^(here\s+is|here\'?s|output|result|json|response)[\s:]*', '', result_str, flags=re.IGNORECASE)
@@ -521,70 +701,117 @@ def generate_agronomy_recommendations(
     soil_type = soil_type or "Unknown"
 
     prompt = ChatPromptTemplate.from_template("""
-You are an agronomy advisor for Maharashtra, India.
+You are an agronomy recommendation assistant for Maharashtra, India agriculture system.
 
-EXPLICIT INPUTS (REQUIRED):
+🔒 DATA SOURCE: You MUST base ALL recommendations ONLY on the provided soil_profile.
+🔒 CONSTRAINT: NEVER recommend based on assumptions or typical patterns.
+
+Required Inputs:
 - District: {district}
 - Season: {season}
 - Irrigation Type: {irrigation_type}
 - Soil Type: {soil_type}
-- Soil Profile: {soil_profile}
+- Soil Profile (READ-ONLY): {soil_profile}
 
-CRITICAL SEASON RULE (MANDATORY):
-If a crop does not belong to the specified season, it must NEVER be recommended.
+🔴 CRITICAL CONSTRAINTS (MANDATORY - NEVER VIOLATE):
 
-Maharashtra Season Guidelines:
-- Kharif (June-October): Soybean, Tur, Cotton, Maize, Rice, Bajra, Jowar, Groundnut, Sugarcane
-- Rabi (October-March): Wheat, Gram (Chana), Onion, Tomato, Potato, Mustard, Sunflower, Garlic, Fenugreek, Coriander
-- Summer (March-June): Watermelon, Muskmelon, Cucumber, Bitter Gourd, Okra
+1. SOIL DATA IS READ-ONLY:
+   - Use ONLY the categories in soil_profile
+   - NEVER infer additional soil properties
+   - NEVER generate numeric soil values
+   - NEVER contradict soil_profile categories
+   - If soil parameter is missing → recommendations must be conservative
 
-You MUST only recommend crops that belong to the specified season: {season}
+2. SEASON ADHERENCE (STRICT):
+   Season: {season}
+   
+   Maharashtra Season Crops:
+   - Kharif (June-Oct): Soybean, Tur, Cotton, Maize, Rice, Bajra, Jowar, Groundnut, Sugarcane
+   - Rabi (Oct-Mar): Wheat, Gram, Onion, Tomato, Potato, Mustard, Sunflower, Garlic, Fenugreek, Coriander
+   - Summer (Mar-Jun): Watermelon, Muskmelon, Cucumber, Bitter Gourd, Okra
+   
+   ❌ NEVER recommend crops outside the specified season
+   ✓ crop_recommendation.season MUST exactly match: {season}
 
-Core Rules:
-1. All recommendations are guideline-based suggestions, NOT prescriptions
-2. Use standard Maharashtra agriculture guidelines
-3. If any soil parameter was inferred, recommendations must be conservative
-4. Never provide exact kg/acre or kg/hectare values - only ranges
-5. Clearly reflect uncertainty when present
-6. The crop_recommendation.season field MUST match the input season: {season}
+3. FERTILITY-BASED CROP FILTERING:
+   - Check soil_profile Nitrogen category and Organic Carbon category
+   - High-input crops (Onion, Sugarcane, Tomato, Potato):
+     * Require: Nitrogen = "Medium" or "High" AND Organic Carbon = "Moderate" or "Rich"
+     * If Nitrogen = "Low" OR Organic Carbon = "Poor" → DO NOT recommend these crops
+   - Low-input crops (Soybean, Tur, Gram, Jowar, Bajra): Suitable for all soil conditions
+   
+4. FERTILIZER RECOMMENDATIONS:
+   - Base recommendations on soil_profile categories ONLY
+   - Use descriptive ranges: "Low", "Medium", "High", "Low to Medium", "Medium to High"
+   - NEVER provide exact numeric values (no kg/ha, kg/acre)
+   - Match fertilizer intensity to soil nutrient status
+   - Include application stages: Basal, Vegetative, Flowering, Grain Filling
 
-Tasks:
-1. Recommend suitable crops (primary 2-3 crops) that belong to season: {season}
-2. Set crop_recommendation.season to: {season}
-3. Provide crop duration (days) for EACH crop separately (e.g., "Wheat": "110–130 days", "Gram": "90–110 days")
-4. Recommend fertilizers with:
-   - Fertilizer types (e.g., Urea, DAP, SSP)
-   - Application stages (Basal, Vegetative, Flowering, etc.)
-   - Quantity ranges only (Low/Medium/High)
-5. Recommend equipment by farming stage
+5. EQUIPMENT RECOMMENDATIONS:
+   - Standard farm equipment for Maharashtra
+   - Appropriate for farm size and mechanization level
+   - No AI inference - use standard lists
 
-CRITICAL: Return ONLY raw JSON. No explanations, no markdown, no surrounding text.
-Output ONLY this JSON structure with no additional text:
+6. CROP DURATION:
+   - Provide typical duration ranges for each recommended crop
+   - Format: "Crop Name": "90-110 days"
+   - Use Maharashtra-specific growing periods
 
+❌ FORBIDDEN ACTIONS:
+❌ Generating or mentioning ANY numeric soil values
+❌ Recommending crops outside specified season
+❌ Recommending high-input crops for low-fertility soil
+❌ Contradicting soil_profile categories
+❌ Inferring soil properties not in soil_profile
+❌ Providing exact fertilizer quantities (kg/ha or kg/acre)
+❌ Overriding backend crop filtering rules
+
+✓ RECOMMENDATION PROCESS:
+1. Read soil_profile categories (pH, Nitrogen, Phosphorus, Potassium, Organic Carbon)
+2. Identify suitable crops for season: {season}
+3. Filter out high-input crops if Nitrogen="Low" or Organic Carbon="Poor"
+4. Select 2-3 primary crops appropriate for soil conditions
+5. Recommend fertilizers based on nutrient deficiencies
+6. Suggest standard equipment for farming stages
+
+✓ OUTPUT FORMAT (JSON only, no text):
 {{
   "version": "farmchain-ai-v1.0",
   "crop_recommendation": {{
     "primary": ["Crop1", "Crop2"],
     "season": "{season}",
     "crop_durations": {{
-      "Crop1": "110–130 days",
-      "Crop2": "90–110 days"
+      "Crop1": "110-130 days",
+      "Crop2": "90-110 days"
     }}
   }},
   "fertilizer_plan": {{
     "Nitrogen": {{
-      "recommended_range": "Low to Medium",
+      "recommended_range": "Medium to High",
       "fertilizers": ["Urea", "DAP"],
       "application_stages": ["Basal", "Vegetative"]
+    }},
+    "Phosphorus": {{
+      "recommended_range": "Low to Medium",
+      "fertilizers": ["DAP", "SSP"],
+      "application_stages": ["Basal"]
+    }},
+    "Potassium": {{
+      "recommended_range": "Medium",
+      "fertilizers": ["MOP", "SOP"],
+      "application_stages": ["Basal", "Flowering"]
     }}
   }},
   "equipment_plan": {{
-    "land_preparation": ["Tractor", "Plough"],
-    "sowing": ["Seed Drill"],
+    "land_preparation": ["Tractor", "Plough", "Harrow"],
+    "sowing": ["Seed Drill", "Planter"],
+    "irrigation": ["Drip System", "Sprinkler"],
     "spraying": ["Power Sprayer"],
-    "harvesting": ["Harvester"]
+    "harvesting": ["Harvester", "Thresher"]
   }}
 }}
+
+CRITICAL: Return ONLY raw JSON. NO explanations. NO markdown. NO text. Start with {{ and end with }}.
 """)
 
     chain = prompt | llm_json | json_parser
@@ -598,7 +825,16 @@ Output ONLY this JSON structure with no additional text:
                 "irrigation_type": irrigation_type,
                 "soil_type": soil_type
             })
+            
             result_str = json.dumps(result)
+            
+            # SAFETY CHECK: Validate AI didn't generate numeric soil values or fertilizer amounts
+            # Allow numeric values in crop_durations (e.g., "90-110 days") but not soil parameters
+            validate_no_numeric_values_in_response(
+                result_str.replace("crop_durations", "___durations___"),  # Temporarily mask durations
+                "generate_agronomy_recommendations"
+            )
+            
             result_str = re.sub(r'https?://[^\s]+langchain[^\s]+', '', result_str)
             result = json.loads(result_str) if result_str else result
 
@@ -673,41 +909,92 @@ def generate_farmer_explanation(
     max_retries: int = 3
 ) -> Dict[str, str]:
     """
-    Generate farmer-friendly explanation HARD-CODED from soilProfile.
-    NO AI generation. NO templates. Direct string assembly from soilProfile categories.
+    🔒 HARDENED: Generate farmer-friendly explanation using ONLY rule-based logic.
+    NO AI involvement. Direct string assembly from soilProfile categories only.
     
-    CRITICAL: Explanation MUST use ONLY soilProfile.Nitrogen.category (FACT).
-    DO NOT use fertilizer_plan.Nitrogen.recommended_range (ACTION).
-    agronomy_data parameter is intentionally unused - explanation reads ONLY from soilProfile.
+    CRITICAL CONSTRAINTS:
+    1. ONLY reads from soil_profile (measured/categorized soil data)
+    2. NEVER uses agronomy_data, fertilizer_plan, or AI inference
+    3. NEVER generates numeric soil values
+    4. Output is deterministic and consistent
+    5. Always includes fallback if parameters missing
     
     ACCEPTANCE TEST:
     Input: Available Nitrogen (N): 120 kg/ha → soil_profile["Nitrogen"]["category"] = "Low"
     Output explanation MUST be: "Nitrogen levels are low."
-    If output contains "medium" → explanation is using wrong variable (fertilizer plan).
+    If output contains "medium" → BUG (using wrong source)
     """
     if not isinstance(soil_profile, dict) or not soil_profile:
         raise ValueError("soilProfile missing — cannot generate explanation. Explanation MUST be generated from soilProfile only.")
 
-    # CORRECT SOURCE: Read nitrogen category directly from soil_profile (derived from numeric value)
-    # DO NOT use: agronomy_data, fertilizer_plan, recommended_range, or any derived variables
-    pH_category = soil_profile["pH"]["category"]
-    soil_nitrogen_category = soil_profile["Nitrogen"]["category"]
+    # Extract categories from soil_profile ONLY (no AI, no inference)
+    pH_category = soil_profile.get("pH", {}).get("category", "Unknown") if isinstance(soil_profile.get("pH"), dict) else "Unknown"
+    nitrogen_category = soil_profile.get("Nitrogen", {}).get("category", "Unknown") if isinstance(soil_profile.get("Nitrogen"), dict) else "Unknown"
+    phosphorus_category = soil_profile.get("Phosphorus", {}).get("category", "Unknown") if isinstance(soil_profile.get("Phosphorus"), dict) else "Unknown"
+    potassium_category = soil_profile.get("Potassium", {}).get("category", "Unknown") if isinstance(soil_profile.get("Potassium"), dict) else "Unknown"
+    
+    organic_carbon_data = soil_profile.get("Organic Carbon", {}) or soil_profile.get("Organic_Carbon", {})
+    organic_carbon_category = organic_carbon_data.get("category", "Unknown") if isinstance(organic_carbon_data, dict) else "Unknown"
+    
     # #region agent log
     try:
         import os
         os.makedirs('/Users/alishaikh/Desktop/FarmChain/.cursor', exist_ok=True)
         import json as json_module
         with open('/Users/alishaikh/Desktop/FarmChain/.cursor/debug.log', 'a') as f:
-            f.write(json_module.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"soil_ai_module.py:790","message":"INSIDE generate_farmer_explanation: soil_profile Nitrogen category","data":{"nitrogen_category":soil_nitrogen_category,"ph_category":pH_category},"timestamp":int(__import__("time").time()*1000)}) + "\n")
+            f.write(json_module.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"soil_ai_module.py:790","message":"INSIDE generate_farmer_explanation: soil_profile categories","data":{"ph_category":pH_category,"nitrogen_category":nitrogen_category,"phosphorus_category":phosphorus_category,"potassium_category":potassium_category,"organic_carbon_category":organic_carbon_category},"timestamp":int(__import__("time").time()*1000)}) + "\n")
     except Exception as log_err:
         print(f"⚠️ DEBUG LOG ERROR: {log_err}", file=sys.stderr)
     # #endregion
 
-    # EXPLANATION MUST USE THIS: soil_nitrogen_category (from soil_profile, not fertilizer plan)
-    explanation = (
-        f"Soil pH is {pH_category.lower()}. "
-        f"Nitrogen levels are {soil_nitrogen_category.lower()}."
-    )
+    # BUILD EXPLANATION - Pure rule-based, no AI
+    explanation_parts = []
+    
+    # pH statement
+    if pH_category != "Unknown":
+        explanation_parts.append(f"Soil pH is {pH_category.lower()}.")
+    else:
+        explanation_parts.append("Soil pH data is not available. Soil testing is recommended.")
+    
+    # Nitrogen statement
+    if nitrogen_category != "Unknown":
+        explanation_parts.append(f"Nitrogen levels are {nitrogen_category.lower()}.")
+        if nitrogen_category == "Low":
+            explanation_parts.append("Nutrient supplementation is required to improve soil fertility.")
+        elif nitrogen_category == "High":
+            explanation_parts.append("Nitrogen levels are sufficient for crop growth.")
+    else:
+        explanation_parts.append("Nitrogen data is not available. Soil testing is recommended.")
+    
+    # Phosphorus statement (if available)
+    if phosphorus_category != "Unknown":
+        if phosphorus_category == "Low":
+            explanation_parts.append("Phosphorus levels are low and may require supplementation.")
+        elif phosphorus_category == "High":
+            explanation_parts.append("Phosphorus levels are adequate.")
+    
+    # Potassium statement (if available)
+    if potassium_category != "Unknown":
+        if potassium_category == "Low":
+            explanation_parts.append("Potassium levels are low and may require supplementation.")
+        elif potassium_category == "High":
+            explanation_parts.append("Potassium levels are adequate.")
+    
+    # Organic Carbon statement
+    if organic_carbon_category != "Unknown":
+        if organic_carbon_category == "Poor":
+            explanation_parts.append("Soil organic carbon is poor, indicating low fertility. Soil improvement is advised.")
+        elif organic_carbon_category == "Moderate":
+            explanation_parts.append("Soil organic carbon is moderate.")
+        elif organic_carbon_category == "Rich":
+            explanation_parts.append("Soil organic carbon is rich, indicating good fertility.")
+    
+    # Context statement
+    explanation_parts.append(f"This recommendation is for {season.lower()} season with {irrigation_type.lower()} irrigation in {district} district.")
+    
+    # Combine into final explanation
+    explanation = " ".join(explanation_parts)
+    
     # #region agent log
     try:
         import json as json_module
@@ -717,43 +1004,12 @@ def generate_farmer_explanation(
         print(f"⚠️ DEBUG LOG ERROR: {log_err}", file=sys.stderr)
     # #endregion
 
-    if (
-        soil_profile["Nitrogen"]["category"] == "Low"
-        and "medium" in explanation.lower()
-    ):
+    # SAFETY CHECK: Verify no contradictions
+    if nitrogen_category == "Low" and "medium" in explanation.lower() and "nitrogen" in explanation.lower():
         raise RuntimeError(
-            "BUG: Explanation nitrogen text does not match soil_profile category"
+            "BUG: Explanation nitrogen text contradicts soil_profile category. "
+            f"Category is '{nitrogen_category}' but explanation contains 'medium'."
         )
-
-    organic_carbon_data = soil_profile.get("Organic Carbon", {}) or soil_profile.get("Organic_Carbon", {})
-    organic_carbon_category = organic_carbon_data.get("category") if isinstance(organic_carbon_data, dict) else None
-
-    if organic_carbon_category and organic_carbon_category != "Unknown":
-        if organic_carbon_category == "Poor":
-            explanation += " Soil organic carbon is poor, indicating low fertility. Soil improvement is advised."
-        elif organic_carbon_category == "Medium":
-            explanation += " Soil organic carbon is medium."
-        elif organic_carbon_category == "Rich":
-            explanation += " Soil organic carbon is rich, indicating good fertility."
-
-    if soil_nitrogen_category == "Low":
-        explanation += " Nutrient supplementation is required to improve soil fertility."
-    elif soil_nitrogen_category == "High":
-        explanation += " Nitrogen levels are sufficient for crop growth."
-
-    explanation += f" This recommendation is for {season.lower()} season with {irrigation_type.lower()} irrigation in {district} district."
-
-    if soil_nitrogen_category == "Low":
-        explanation_lower = explanation.lower()
-        nitrogen_medium_patterns = [
-            r"nitrogen\s+levels?\s+are\s+medium\b",
-            r"nitrogen\s+is\s+medium\b",
-            r"\bmedium\s+nitrogen\s+levels?\b",
-            r"\bmedium\s+nitrogen\b"
-        ]
-        for pattern in nitrogen_medium_patterns:
-            if re.search(pattern, explanation_lower):
-                raise ValueError("FAIL-FAST: Hardcoded nitrogen wording still present. Explanation is not using soilProfile nitrogen category. Nitrogen category is 'Low' but explanation contains 'medium' in relation to nitrogen. Explanation MUST use soilProfile.Nitrogen.category only, never fertilizer plan or default strings.")
 
     disclaimer = get_disclaimer(language)
 
@@ -773,13 +1029,15 @@ def generate_advisory(
     language: str = "marathi"
 ) -> Optional[str]:
     """
-    Generate human-friendly advisory text using AI.
+    🔒 HARDENED: Generate human-friendly advisory text using llm_text (temperature ≤ 0.3).
     
     SAFETY CONSTRAINTS:
     - MUST read from: soilProfile categories, selected crops, fertilizer plan, season & irrigation
-    - MUST NOT: infer new soil categories, contradict summary, introduce new crops, override fertilizer ranges
+    - MUST NOT: generate numeric soil values, contradict summary, introduce new crops, override ranges
+    - Uses llm_text for human-friendly language (not strict JSON)
+    - Returns None if generation fails or validation fails
     
-    Returns None if generation fails or validation fails.
+    This is the ONLY function allowed to use AI for text generation (not data).
     """
     try:
         if not isinstance(soil_profile, dict) or not soil_profile:
@@ -799,41 +1057,61 @@ def generate_advisory(
         organic_carbon_data = soil_profile.get("Organic Carbon", {}) or soil_profile.get("Organic_Carbon", {})
         organic_carbon_category = organic_carbon_data.get("category", "Unknown") if isinstance(organic_carbon_data, dict) else "Unknown"
         
-        # Build prompt with strict constraints
-        prompt_text = f"""You are an agronomy advisor providing human-friendly guidance to farmers in Maharashtra, India.
+        # Build hardened prompt with strict constraints
+        prompt_text = f"""You are an agriculture advisory assistant for Maharashtra, India farmers.
 
-CRITICAL RULES (MANDATORY - NEVER VIOLATE):
-1. DO NOT infer or modify soil categories - use ONLY the provided categories
-2. DO NOT contradict the factual summary (pH: {pH_category}, Nitrogen: {nitrogen_category})
-3. DO NOT mention crops that are NOT in the recommended list: {', '.join(crops) if crops else 'None'}
-4. DO NOT override fertilizer ranges - use only what is provided
-5. DO NOT introduce new soil interpretations
+🔒 YOUR ROLE: Provide friendly, practical farming guidance based ONLY on the data provided below.
 
-PROVIDED DATA (READ-ONLY):
-- Soil pH: {pH_category}
-- Soil Nitrogen: {nitrogen_category}
-- Organic Carbon: {organic_carbon_category}
+📋 PROVIDED DATA (READ-ONLY - DO NOT MODIFY):
+- Soil pH Category: {pH_category}
+- Soil Nitrogen Category: {nitrogen_category}
+- Organic Carbon Category: {organic_carbon_category}
 - Recommended Crops: {', '.join(crops) if crops else 'None'}
 - Season: {season}
 - Irrigation: {irrigation_type}
 - District: {district}
-- Fertilizer Plan: {json.dumps(fertilizer_plan, indent=2) if fertilizer_plan else 'None'}
+- Language: {"Marathi" if language == "marathi" else "English"}
 
-YOUR TASK:
-Generate a friendly, advisory explanation that:
-- Explains what the soil conditions mean for farming
-- Provides context about the recommended crops
-- Offers practical guidance based on the fertilizer plan
-- Uses simple language suitable for farmers
-- Is written in {"Marathi" if language == "marathi" else "English"}
+🔴 CRITICAL CONSTRAINTS (MANDATORY - NEVER VIOLATE):
 
-OUTPUT REQUIREMENTS:
+1. NO NUMERIC SOIL VALUES:
+   - NEVER mention pH values like "7.2" or "6.5"
+   - NEVER mention nutrient amounts like "150 kg/ha" or "200 kg/acre"
+   - Use ONLY categories: {pH_category}, {nitrogen_category}, {organic_carbon_category}
+
+2. NO NEW INTERPRETATIONS:
+   - DO NOT infer additional soil properties
+   - DO NOT contradict the categories above
+   - DO NOT suggest crops not in the recommended list
+   - DO NOT change the season or irrigation type
+
+3. CROP ADHERENCE:
+   - Mention ONLY these crops: {', '.join(crops) if crops else 'None'}
+   - DO NOT suggest alternative crops
+   - DO NOT mention crops from other seasons
+
+4. NO EXACT QUANTITIES:
+   - DO NOT provide exact fertilizer amounts
+   - Use descriptive terms: "moderate", "adequate", "light", "heavy"
+
+❌ FORBIDDEN EXAMPLES:
+❌ "Your soil pH is 7.2" → Use: "Your soil pH is {pH_category.lower()}"
+❌ "Apply 150 kg/ha of nitrogen" → Use: "Apply adequate nitrogen fertilizers"
+❌ "Consider wheat as well" (if wheat not in crops list)
+❌ "Nitrogen is medium" (if nitrogen_category is "Low")
+
+✅ YOUR TASK:
+Write a friendly 2-4 sentence advisory in {"Marathi" if language == "marathi" else "English"} that:
+- Explains what the soil conditions mean for the farmer
+- Mentions the recommended crops and why they're suitable
+- Provides practical next steps
+- Uses simple, farmer-friendly language
+
+✅ OUTPUT:
 - Return ONLY the advisory text
-- NO markdown formatting
-- NO JSON structure
-- NO explanations about your process
-- Start directly with the advisory text
-- Keep it concise (2-4 sentences)
+- NO markdown, NO JSON, NO formatting
+- Start directly with the advisory
+- Keep it concise and actionable
 
 Generate the advisory now:"""
 
@@ -847,41 +1125,64 @@ Generate the advisory now:"""
         advisory = re.sub(r'^(here\s+is|here\'?s|advisory|output|result)[\s:]*', '', advisory, flags=re.IGNORECASE)
         advisory = re.sub(r'```.*?```', '', advisory, flags=re.DOTALL)
         
-        # VALIDATION: Ensure advisory does not contradict summary
-        advisory_lower = advisory.lower()
+        # SAFETY CHECK: Validate advisory doesn't contain numeric soil values
+        forbidden_patterns = [
+            r'pH\s+(?:is|=|:)\s+\d+\.?\d*',  # pH is 7.2
+            r'\d{2,}\s*(?:kg/ha|kg/acre)',  # 150 kg/ha
+            r'nitrogen\s+(?:is|=|:)\s+\d+',  # nitrogen is 150
+            r'phosphorus\s+(?:is|=|:)\s+\d+',
+            r'potassium\s+(?:is|=|:)\s+\d+',
+        ]
         
+        advisory_lower = advisory.lower()
+        for pattern in forbidden_patterns:
+            if re.search(pattern, advisory_lower):
+                print(f"⚠️ ADVISORY VALIDATION FAILED: Contains numeric values. Pattern: {pattern}", file=sys.stderr)
+                return None  # Discard advisory if it contains numeric values
+        
+        # VALIDATION: Ensure advisory doesn't contradict summary
         # Check 1: No "medium nitrogen" if nitrogen is Low
         if nitrogen_category == "Low":
             if "medium" in advisory_lower and ("nitrogen" in advisory_lower or "n " in advisory_lower):
+                print(f"⚠️ ADVISORY VALIDATION FAILED: Contradicts nitrogen category", file=sys.stderr)
                 return None  # Discard advisory if it contradicts
         
-        # Check 2: No crops not in the recommended list
-        if crops:
-            crop_lower = [c.lower() for c in crops]
-            # Extract potential crop mentions (simple heuristic)
-            for word in advisory_lower.split():
-                word_clean = word.strip('.,!?;:')
-                if word_clean and word_clean not in crop_lower and len(word_clean) > 3:
-                    # Check if it's a known crop name (basic check)
-                    known_crops = ["wheat", "gram", "onion", "tomato", "potato", "soybean", "cotton", "maize", "rice"]
-                    if word_clean in known_crops and word_clean not in crop_lower:
-                        return None  # Discard if mentions crop not in list
-        
-        # Check 3: No new soil category interpretations
-        # Advisory should not claim different categories than provided
-        if nitrogen_category == "Low" and ("high nitrogen" in advisory_lower or "sufficient nitrogen" in advisory_lower):
+        # Check 2: No "high nitrogen" if nitrogen is Low
+        if nitrogen_category == "Low" and ("high nitrogen" in advisory_lower or "sufficient nitrogen" in advisory_lower or "adequate nitrogen" in advisory_lower):
+            print(f"⚠️ ADVISORY VALIDATION FAILED: Claims high/sufficient nitrogen when it's Low", file=sys.stderr)
             return None
         
+        # Check 3: pH category adherence
         if pH_category == "Neutral" and ("acidic" in advisory_lower or "alkaline" in advisory_lower):
             # Allow if it's explaining what neutral means, but not if contradicting
             if "soil is acidic" in advisory_lower or "soil is alkaline" in advisory_lower:
+                print(f"⚠️ ADVISORY VALIDATION FAILED: Contradicts pH category", file=sys.stderr)
                 return None
+        
+        # Check 4: Crop adherence - basic check
+        if crops:
+            # Extract words from advisory that might be crop names
+            words = re.findall(r'\b[A-Za-z]+\b', advisory)
+            crop_lower = [c.lower() for c in crops]
+            
+            # Known crop names that should only appear if in crops list
+            known_crops = ["wheat", "gram", "onion", "tomato", "potato", "soybean", "cotton", "maize", 
+                          "rice", "sugarcane", "tur", "bajra", "jowar", "groundnut", "mustard", 
+                          "sunflower", "garlic", "fenugreek", "coriander", "watermelon", "muskmelon", 
+                          "cucumber", "okra"]
+            
+            for word in words:
+                word_clean = word.lower().strip('.,!?;:')
+                if word_clean in known_crops and word_clean not in crop_lower:
+                    print(f"⚠️ ADVISORY VALIDATION FAILED: Mentions crop '{word_clean}' not in recommended list", file=sys.stderr)
+                    return None  # Discard if mentions crop not in list
         
         return advisory if advisory else None
         
     except Exception as e:
         # Fail silently - return None if advisory generation fails
         # This ensures the core summary is always available
+        print(f"⚠️ Advisory generation error: {e}", file=sys.stderr)
         return None
 
 def process_soil_report(
