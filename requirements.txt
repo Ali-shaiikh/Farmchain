@@ -1,6 +1,11 @@
 langchain
 langchain-core
+langchain-ollama
 langchain-google-genai
 google-generativeai
 python-dotenv
 streamlit
+pdfplumber
+PyPDF2
+pytesseract
+Pillow

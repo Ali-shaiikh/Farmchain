@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en" id="html">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-en="Farmer Portal" data-mr="शेतकरी पोर्टल">Farmer Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body { font-family: 'Inter', sans-serif; }
+      [lang="mr"] { font-family: 'Noto Serif Devanagari', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+<!-- Enhanced Speech Controls with Translation Status -->
+<div id="speech-controls" class="speech-controls">
+  <div class="text-sm font-semibold mb-2" data-en="Text-to-Speech" data-mr="मजकूर-ते-भाषण">Text-to-Speech</div>
+  <button id="stop-speech" class="speech-btn" data-en="Stop" data-mr="थांबवा">Stop</button>
+  <button id="pause-speech" class="speech-btn" data-en="Pause" data-mr="विराम">Pause</button>
+  <button id="resume-speech" class="speech-btn" data-en="Resume" data-mr="पुन्हा सुरू">Resume</button>
+  
+  <!-- Translation Status Indicator -->
+  <div id="translation-status" class="mt-2 text-xs text-gray-600">
+    <span data-en="Translation: " data-mr="भाषांतर: ">Translation: </span>
+    <span id="translation-provider" data-en="Loading..." data-mr="लोड होत आहे...">Loading...</span>
+  </div>
+</div>
+
+<%- include('partials/header') %>
+
+<div class="container mx-auto p-6">
+
+  <!-- Enhanced Language Controls -->
+  <div class="flex justify-between items-center mb-4">
+    <div class="flex gap-2">
+      <button type="button" class="lang-btn active" onclick="window.FarmChainEnhancedSpeech.setLanguage('en')" data-lang="en">English</button>
+      <button type="button" class="lang-btn" onclick="window.FarmChainEnhancedSpeech.setLanguage('mr')" data-lang="mr">मराठी</button>
+    </div>
+    
+    <!-- Translation Controls -->
+    <div class="flex gap-2">
+      <button id="translate-dynamic" class="bg-blue-500 text-white px-3 py-1 rounded text-sm" 
+              data-en="Translate Dynamic Content" data-mr="डायनॅमिक सामग्री भाषांतर करा">
+        Translate Dynamic Content
+      </button>
+      <button id="revert-translations" class="bg-gray-500 text-white px-3 py-1 rounded text-sm"
+              data-en="Revert Translations" data-mr="भाषांतर परत करा">
+        Revert Translations
+      </button>
+    </div>
+  </div>
+
+  <h1 class="text-2xl font-semibold mb-4 text-center speakable" data-en="Welcome, <%= farmerName %>!" data-mr="आपले स्वागत आहे, <%= farmerName %>!">
+    Welcome, <%= farmerName %>!
+  </h1>
+
+  <h2 class="text-3xl font-bold text-emerald-700 mb-6 text-center speakable" data-en="Available Equipment" data-mr="उपलब्ध यंत्रसामग्री">
+    Available Equipment
+  </h2>
+
+  <!-- Dynamic Content Example -->
+  <div id="dynamic-content" class="mb-6 p-4 bg-white rounded-lg shadow">
+    <h3 class="font-semibold mb-2" data-en="Recent Updates" data-mr="अलीकडील अपडेट्स">Recent Updates</h3>
+    <p class="text-gray-600" data-en="This content is dynamically loaded and will be translated on-the-fly when you switch to Marathi." 
+       data-mr="ही सामग्री डायनॅमिकली लोड केली जाते आणि तुम्ही मराठीमध्ये बदलता तेव्हा ती त्वरित भाषांतरित केली जाईल.">
+      This content is dynamically loaded and will be translated on-the-fly when you switch to Marathi.
+    </p>
+    
+    <!-- User-generated content example -->
+    <div class="mt-4 p-3 bg-gray-50 rounded">
+      <p class="text-sm text-gray-700">
+        New tractor available in your area: John Deere 5075E with advanced GPS navigation system.
+        Contact seller for immediate booking.
+      </p>
+    </div>
+  </div>
+
+  <form class="mb-6 flex flex-wrap gap-2 items-center" method="GET">
+    <select name="region" class="border p-2 rounded">
+      <option value="" data-en="Select Region" data-mr="प्रदेश निवडा">Select Region</option>
+      <% REGIONS.forEach(function(r) { %>
+        <option value="<%= r %>" <%= region === r ? 'selected' : '' %>><%= r %></option>
+      <% }); %>
+    </select>
+
+    <select name="category" class="border p-2 rounded">
+      <option value="all" data-en="All Categories" data-mr="सर्व श्रेण्या">All Categories</option>
+      <% CATEGORIES.forEach(function(c) { %>
+        <option value="<%= c %>" <%= category === c ? 'selected' : '' %>>
+          <%= CATEGORY_TRANSLATIONS[c] || c %>
+        </option>
+      <% }); %>
+    </select>
+
+    <input type="text" name="q" placeholder="Search..." class="border p-2 rounded flex-1" value="<%= query %>"/>
+    <button class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded transition speakable" data-en="Filter" data-mr="फिल्टर करा">
+      Filter
+    </button>
+  </form>
+
+  <% if(listings && listings.length > 0) { %>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <% listings.forEach(function(l) { 
+           const imgUrl = (l.img && l.img.trim() !== "") ? l.img : "https://via.placeholder.com/300x150"; 
+      %>
+        <div class="bg-white p-4 rounded-2xl shadow hover:shadow-xl transition flex flex-col">
+          <div class="w-full h-40 bg-cover bg-center rounded-xl mb-3" style="background-image: url('<%= imgUrl %>');"></div>
+          <h3 class="font-bold text-lg text-gray-700 mb-1 speakable">
+            <%= CATEGORY_TRANSLATIONS[l.name] || l.name %>
+          </h3>
+          <p class="text-sm text-gray-500 mb-1 speakable">
+            <%= CATEGORY_TRANSLATIONS[l.category] || l.category %> • <%= l.region %>
+          </p>
+          <p class="text-sm text-gray-600 font-medium mb-2 speakable">
+            ₹<%= l.pricePerDay %>/day
+          </p>
+
+          <form method="POST" action="/farmer/book/<%= l._id %>" class="flex gap-2 items-center">
+            <input type="number" name="days" placeholder="Days" class="border p-1 rounded w-20" min="1" required/>
+            <button class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded transition speakable" data-en="Book" data-mr="बुक करा">
+              Book
+            </button>
+          </form>
+        </div>
+      <% }); %>
+    </div>
+  <% } else { %>
+    <div class="text-center py-8">
+      <p class="text-gray-500 speakable" data-en="No equipment found" data-mr="कोणतीही यंत्रसामग्री सापडली नाही">No equipment found</p>
+    </div>
+  <% } %>
+
+</div>
+
+<%- include('partials/footer') %>
+
+<!-- Enhanced Scripts -->
+<script src="/js/translation.js"></script>
+<script src="/js/enhanced-speech.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', async function() {
+    // Initialize enhanced speech system
+    await window.FarmChainEnhancedSpeech.initEnhancedSpeech();
+    
+    // Set initial language
+    window.FarmChainEnhancedSpeech.setLanguage('en');
+    
+    // Update translation status
+    const stats = window.TranslationService.getStats();
+    document.getElementById('translation-provider').textContent = stats.provider;
+    
+    // Add event listeners for translation controls
+    document.getElementById('translate-dynamic').addEventListener('click', async () => {
+      await window.FarmChainEnhancedSpeech.translateDynamicContent();
+    });
+    
+    document.getElementById('revert-translations').addEventListener('click', () => {
+      window.FarmChainEnhancedSpeech.revertAllTranslations();
+    });
+    
+    // Example: Add dynamic content periodically
+    setInterval(() => {
+      const dynamicContent = document.getElementById('dynamic-content');
+      const newElement = document.createElement('div');
+      newElement.className = 'mt-2 p-2 bg-yellow-50 rounded text-sm';
+      newElement.textContent = 'New notification: Equipment maintenance scheduled for next week.';
+      dynamicContent.appendChild(newElement);
+    }, 10000); // Add new content every 10 seconds
+  });
+</script>
+
+</body>
+</html>
+
+
+

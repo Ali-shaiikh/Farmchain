@@ -1,0 +1,20 @@
+# Node
+webapp/node_modules/
+
+# Python
+__pycache__/
+*.pyc
+
+# Env / secrets
+webapp/.env
+webapp/.env.backup
+.env
+
+# Logs
+webapp/server.log
+
+# Uploads
+webapp/public/uploads/
+
+# OS
+.DS_Store

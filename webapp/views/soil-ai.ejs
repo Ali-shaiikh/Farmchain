@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en" id="html">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title data-en="Soil Report & AI Advisor" data-mr="माती अहवाल व AI सल्लागार">Soil Report & AI Advisor</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Serif+Devanagari:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/speech.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<style>
+  body { font-family: 'Inter', sans-serif; background: #f7f4ed; }
+  [lang="mr"] { font-family: 'Noto Serif Devanagari', sans-serif; }
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<div id="speech-controls" class="speech-controls">
+  <div class="text-sm font-semibold mb-2" data-en="Text-to-Speech" data-mr="मजकूर-ते-भाषण">Text-to-Speech</div>
+  <button id="stop-speech" class="speech-btn" data-en="Stop" data-mr="थांबवा">Stop</button>
+  <button id="pause-speech" class="speech-btn" data-en="Pause" data-mr="विराम">Pause</button>
+  <button id="resume-speech" class="speech-btn" data-en="Resume" data-mr="पुन्हा सुरू">Resume</button>
+</div>
+
+<%- include('partials/header') %>
+
+<div class="container mx-auto p-6 max-w-4xl">
+  <div class="flex justify-end mb-4">
+    <button type="button" class="lang-btn active" onclick="window.FarmChainSpeech.setLanguage('en')" data-lang="en">English</button>
+    <button type="button" class="lang-btn" onclick="window.FarmChainSpeech.setLanguage('mr')" data-lang="mr">मराठी</button>
+  </div>
+
+  <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+    <h1 class="text-3xl font-bold text-emerald-700 mb-2 text-center speakable" data-en="Soil Report & AI Advisor" data-mr="माती अहवाल व AI सल्लागार">
+      Soil Report & AI Advisor
+    </h1>
+    <p class="text-gray-600 text-center mb-6 speakable" data-en="Upload your soil report and get AI-powered recommendations for crops, fertilizers, and equipment." data-mr="आपला माती अहवाल अपलोड करा आणि पिके, खते आणि उपकरणांसाठी AI-आधारित शिफारसी मिळवा.">
+      Upload your soil report and get AI-powered recommendations for crops, fertilizers, and equipment.
+    </p>
+
+    <form id="soilForm" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2 speakable" data-en="Soil Report" data-mr="माती अहवाल">
+          Soil Report
+        </label>
+        
+        <!-- File Upload Input -->
+        <div class="mb-3">
+          <label class="block text-sm font-medium text-gray-700 mb-2 speakable" data-en="Upload PDF or Image" data-mr="PDF किंवा प्रतिमा अपलोड करा">
+            Upload PDF or Image (Optional)
+          </label>
+          <input 
+            type="file" 
+            id="fileInput" 
+            accept=".pdf,.jpg,.jpeg,.png"
+            class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+          />
+          <p class="text-xs text-gray-500 mt-1 speakable" data-en="Upload a PDF or image of your soil report. Text will be extracted automatically." data-mr="आपला माती अहवाल PDF किंवा प्रतिमा अपलोड करा. मजकूर आपोआप काढला जाईल.">
+            Upload a PDF or image of your soil report. Text will be extracted automatically.
+          </p>
+          <div id="fileStatus" class="hidden mt-2 text-sm"></div>
+        </div>
+
+        <!-- Textarea (always present as fallback) -->
+        <label class="block text-sm font-medium text-gray-700 mb-2 speakable" data-en="Soil Report Text" data-mr="माती अहवाल मजकूर">
+          Soil Report Text *
+        </label>
+        <textarea 
+          id="reportText" 
+          name="report_text" 
+          rows="8" 
+          class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+          placeholder="Paste your soil report text here, type manually, or upload a file above..."
+          required
+        ></textarea>
+        <p class="text-xs text-gray-500 mt-1 speakable" data-en="Paste text manually or upload a file above. Include parameters like pH, Nitrogen, Phosphorus, Potassium, etc." data-mr="मजकूर स्वतः पेस्ट करा किंवा वरील फाइल अपलोड करा. pH, नायट्रोजन, फॉस्फरस, पोटॅशियम इत्यादी पॅरामीटर्स समाविष्ट करा.">
+          Paste text manually or upload a file above. Include parameters like pH, Nitrogen, Phosphorus, Potassium, etc.
+        </p>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2 speakable" data-en="District" data-mr="जिल्हा">
+            District *
+          </label>
+          <select 
+            id="district" 
+            name="district" 
+            class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-emerald-500"
+            required
+          >
+            <option value="">Select District</option>
+            <% districts.forEach(function(d) { %>
+              <option value="<%= d %>"><%= d %></option>
+            <% }); %>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2 speakable" data-en="Soil Type" data-mr="मातीचा प्रकार">
+            Soil Type
+          </label>
+          <select 
+            id="soilType" 
+            name="soil_type" 
+            class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-emerald-500"
+          >
+            <option value="">Select Soil Type</option>
+            <% soilTypes.forEach(function(s) { %>
+              <option value="<%= s %>"><%= s %></option>
+            <% }); %>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2 speakable" data-en="Season" data-mr="ऋतू">
+            Season *
+          </label>
+          <select 
+            id="season" 
+            name="season" 
+            class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-emerald-500"
+            required
+          >
+            <option value="">Select Season</option>
+            <% seasons.forEach(function(s) { %>
+              <option value="<%= s %>" <%= s === 'Kharif' ? 'selected' : '' %>><%= s %></option>
+            <% }); %>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2 speakable" data-en="Irrigation Type" data-mr="सिंचन प्रकार">
+            Irrigation Type *
+          </label>
+          <select 
+            id="irrigationType" 
+            name="irrigation_type" 
+            class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-emerald-500"
+            required
+          >
+            <option value="">Select Irrigation Type</option>
+            <% irrigationTypes.forEach(function(i) { %>
+              <option value="<%= i %>" <%= i === 'Rain-fed' ? 'selected' : '' %>><%= i %></option>
+            <% }); %>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2 speakable" data-en="Output Language" data-mr="आउटपुट भाषा">
+          Output Language
+        </label>
+        <select 
+          id="language" 
+          name="language" 
+          class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-emerald-500"
+        >
+          <option value="marathi" <%= lang === 'mr' ? 'selected' : '' %> data-en="Marathi" data-mr="मराठी">Marathi</option>
+          <option value="english" <%= lang === 'en' ? 'selected' : '' %> data-en="English" data-mr="इंग्रजी">English</option>
+        </select>
+      </div>
+
+      <button 
+        type="submit" 
+        class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors speakable" 
+        data-en="Analyze Soil Report" 
+        data-mr="माती अहवाल विश्लेषण करा"
+      >
+        <i data-lucide="microscope" class="w-5 h-5 inline mr-2"></i>
+        Analyze Soil Report
+      </button>
+    </form>
+  </div>
+
+  <div id="results" class="hidden bg-white rounded-lg shadow-lg p-6">
+    <h2 class="text-2xl font-bold text-emerald-700 mb-4 speakable" data-en="Analysis Results" data-mr="विश्लेषण परिणाम">
+      Analysis Results
+    </h2>
+    <div id="resultsContent" class="space-y-4"></div>
+  </div>
+
+  <div id="loading" class="hidden text-center py-8">
+    <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+    <p class="mt-4 text-gray-600 speakable" data-en="Analyzing soil report..." data-mr="माती अहवाल विश्लेषण करत आहे...">
+      Analyzing soil report...
+    </p>
+  </div>
+
+  <div id="error" class="hidden bg-red-50 border border-red-200 rounded-lg p-4 text-red-700"></div>
+</div>
+
+<script src="/js/speech.js"></script>
+<script>
+  lucide.createIcons();
+  
+  document.addEventListener('DOMContentLoaded', function() {
+    window.FarmChainSpeech.setLanguage('<%= typeof lang !== "undefined" && lang ? lang : "en" %>');
+    
+    // File upload handler
+    const fileInput = document.getElementById('fileInput');
+    const reportText = document.getElementById('reportText');
+    const fileStatus = document.getElementById('fileStatus');
+    
+    fileInput.addEventListener('change', async function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      fileStatus.classList.remove('hidden');
+      fileStatus.className = 'mt-2 text-sm text-blue-600';
+      fileStatus.textContent = 'Extracting text from file...';
+      
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      try {
+        const response = await fetch('/soil-ai/extract', {
+          method: 'POST',
+          body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.text) {
+          // Auto-fill textarea with extracted text
+          reportText.value = data.text;
+          fileStatus.className = 'mt-2 text-sm text-green-600';
+          fileStatus.textContent = '✓ Text extracted successfully! Review and edit if needed.';
+        } else {
+          fileStatus.className = 'mt-2 text-sm text-red-600';
+          fileStatus.textContent = 'Error: ' + (data.error || 'Failed to extract text');
+        }
+      } catch (error) {
+        fileStatus.className = 'mt-2 text-sm text-red-600';
+        fileStatus.textContent = 'Error: ' + error.message;
+      }
+    });
+  });
+
+  document.getElementById('soilForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = {
+      report_text: document.getElementById('reportText').value,
+      district: document.getElementById('district').value,
+      soil_type: document.getElementById('soilType').value,
+      season: document.getElementById('season').value,
+      irrigation_type: document.getElementById('irrigationType').value,
+      language: document.getElementById('language').value
+    };
+
+    // Show loading, hide results/error
+    document.getElementById('loading').classList.remove('hidden');
+    document.getElementById('results').classList.add('hidden');
+    document.getElementById('error').classList.add('hidden');
+
+    try {
+      const response = await fetch('/soil-ai/analyze', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+      });
+
+      const data = await response.json();
+
+      document.getElementById('loading').classList.add('hidden');
+
+      if (!data.success) {
+        throw new Error(data.error || 'Analysis failed');
+      }
+
+      // Show results and display content
+      const resultsDiv = document.getElementById('results');
+      if (resultsDiv) {
+        resultsDiv.classList.remove('hidden');
+      }
+      
+      displayResults(data);
+    } catch (error) {
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('error').classList.remove('hidden');
+      document.getElementById('error').textContent = 'Error: ' + error.message;
+    }
+  });
+
+  function displayResults(data) {
+    const container = document.getElementById('resultsContent');
+    if (!container) return;
+    
+    // Build complete HTML including explanation FIRST, then recommendations
+    let html = '';
+    
+    // EXPLANATION SECTION - ALWAYS FIRST
+    if (data.explanation && data.explanation.summary) {
+      const summaryText = data.explanation.summary;
+      html += `
+        <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4">
+          <h3 class="font-semibold text-emerald-800 mb-3">AI Recommendations</h3>
+          <div class="mb-4">
+            <h4 class="font-semibold text-gray-800 mb-2">Summary</h4>
+            <div class="text-gray-700 whitespace-pre-wrap leading-relaxed">${escapeHtml(summaryText)}</div>
+          </div>
+      `;
+      
+      // ALWAYS show advisory below Summary (it's always generated now)
+      const advisoryText = data.explanation.advisory || '';
+      if (advisoryText.trim()) {
+        html += `
+          <div class="mt-4 pt-4 border-t border-emerald-300">
+            <h4 class="font-semibold text-gray-800 mb-2">Advisory</h4>
+            <div class="text-gray-700 whitespace-pre-wrap leading-relaxed">${escapeHtml(advisoryText)}</div>
+          </div>
+        `;
+      }
+      
+      if (data.explanation.disclaimer) {
+        html += `<div class="text-sm text-gray-600 mt-4 p-3 bg-yellow-50 border-l-4 border-yellow-400 italic">${escapeHtml(data.explanation.disclaimer)}</div>`;
+      }
+      
+      html += `</div>`;
+    }
+    
+    // RECOMMENDATIONS SECTION - AFTER EXPLANATION
+    if (data.recommendations) {
+      html += '<h3 class="font-semibold text-gray-800 mb-4 mt-4">Detailed Recommendations</h3>';
+      
+      // Crop Recommendations
+      if (data.recommendations.crop_recommendation) {
+        const crop = data.recommendations.crop_recommendation;
+        let durationHTML = '';
+        
+        if (crop.crop_durations && typeof crop.crop_durations === 'object') {
+          durationHTML = Object.entries(crop.crop_durations).map(([cropName, duration]) => 
+            `<p class="text-sm"><strong>${escapeHtml(cropName)}:</strong> ${escapeHtml(duration)}</p>`
+          ).join('');
+        } else if (crop.duration_days) {
+          durationHTML = `<p><strong>Duration:</strong> ${escapeHtml(crop.duration_days)} days</p>`;
+        } else {
+          durationHTML = '<p><strong>Duration:</strong> N/A</p>';
+        }
+        
+        html += `
+          <div class="bg-white border border-gray-200 rounded-lg p-4 mb-4">
+            <h4 class="font-semibold text-gray-800 mb-2">🌾 Crop Recommendations</h4>
+            <p><strong>Primary Crops:</strong> ${crop.primary ? crop.primary.map(escapeHtml).join(', ') : 'N/A'}</p>
+            <p><strong>Season:</strong> ${escapeHtml(crop.season || 'N/A')}</p>
+            <div class="mt-2"><strong>Duration:</strong> ${durationHTML}</div>
+          </div>
+        `;
+      }
+      
+      // Fertilizer Plan
+      if (data.recommendations.fertilizer_plan) {
+        html += `
+          <div class="bg-white border border-gray-200 rounded-lg p-4 mb-4">
+            <h4 class="font-semibold text-gray-800 mb-2">💊 Fertilizer Plan</h4>
+            ${Object.entries(data.recommendations.fertilizer_plan).map(([nutrient, plan]) => `
+              <div class="mb-2">
+                <strong>${nutrient}:</strong> ${plan.recommended_range || 'N/A'}<br>
+                <span class="text-sm text-gray-600">Fertilizers: ${plan.fertilizers ? plan.fertilizers.join(', ') : 'N/A'}</span><br>
+                <span class="text-sm text-gray-600">Stages: ${plan.application_stages ? plan.application_stages.join(', ') : 'N/A'}</span>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+      
+      // Equipment Plan
+      if (data.recommendations.equipment_plan) {
+        html += `
+          <div class="bg-white border border-gray-200 rounded-lg p-4 mb-4">
+            <h4 class="font-semibold text-gray-800 mb-2">🚜 Equipment Plan</h4>
+            ${Object.entries(data.recommendations.equipment_plan).map(([stage, equipment]) => `
+              <div class="mb-2">
+                <strong>${stage.replace('_', ' ').toUpperCase()}:</strong> ${Array.isArray(equipment) ? equipment.join(', ') : equipment}
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+    }
+    
+    // Set all HTML at once - explanation first, then recommendations
+    container.innerHTML = html;
+  }
+  
+  // Helper function to escape HTML (prevent XSS)
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+</script>
+</body>
+</html>

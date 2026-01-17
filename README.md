@@ -1,357 +1,122 @@
-# 🌾 FarmChain - Smart Agricultural Equipment Rental Platform
+# FarmChain
 
-[![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
-[![MongoDB](https://img.shields.io/badge/MongoDB-6.0+-blue.svg)](https://www.mongodb.com/)
-[![Express.js](https://img.shields.io/badge/Express.js-5.1+-black.svg)](https://expressjs.com/)
-[![Python](https://img.shields.io/badge/Python-3.8+-yellow.svg)](https://www.python.org/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.28+-red.svg)](https://streamlit.io/)
+Smart agriculture platform combining equipment rental, soil intelligence, and multilingual farmer experiences.
 
-> **Empowering farmers with modern technology for efficient equipment rental and AI-powered recommendations**
+## At a Glance
+- Roles: Farmer, Seller, Admin (JWT-secured)
+- AI: Soil report parsing + fertilizer/crop guidance (Ollama Llama 3.2 + Gemini 2.0)
+- UX: English/Marathi UI, speech support, responsive layouts
+- Data: MongoDB for users/listings; on-disk uploads for images
+- Infra: Node/Express web app, Python AI worker, Hardhat contracts scaffold
 
-## 📋 Table of Contents
+## Architecture
+- Web app: `webapp/server.js` (Express, EJS views, Multer uploads, JWT auth)
+- Soil AI service: Python (`soil_ai_module.py`, `soil_ai_api.py`) invoked from Node via stdin/stdout
+- Frontend assets: `webapp/public` (CSS/JS) and `webapp/views` (EJS templates)
+- Smart-contract scaffold: Hardhat config + `contracts/FarmMachinery.sol`
 
-- [Overview](#-overview)
-- [Features](#-features)
-- [Technology Stack](#-technology-stack)
-- [Installation](#-installation)
-- [Usage](#-usage)
-- [API Documentation](#-api-documentation)
-- [AI Features](#-ai-features)
-- [Screenshots](#-screenshots)
-- [Contributing](#-contributing)
-- [License](#-license)
+## Tech Stack
+- Backend: Node 18+, Express 5, Mongoose, JWT, Multer, Bcrypt
+- Frontend: EJS, vanilla JS, Tailwind CSS
+- AI: Python 3.9+, LangChain, Ollama (llama3.2), Google Generative AI (gemini-2.0-flash)
+- DB: MongoDB 6+
+- Tooling: Hardhat, Nodemon, npm
 
-## 🌟 Overview
+## Prerequisites
+- Node 18+
+- Python 3.9+
+- MongoDB running locally (default: mongodb://localhost:27017/farmrent)
+- Ollama running with model `llama3.2` pulled
+- Google Generative AI API key (for Gemini)
 
-FarmChain is a comprehensive agricultural equipment rental platform that connects farmers, equipment sellers, and administrators. The platform features a modern web application with JWT authentication, multilingual support (English/Marathi), text-to-speech functionality, and an AI-powered equipment recommendation system.
+## Quick Start
+From repo root:
 
-### 🎯 Key Highlights
-
-- **Multi-Role Platform**: Farmer, Seller, and Admin portals
-- **Bilingual Support**: English and Marathi with seamless language switching
-- **Accessibility Features**: Text-to-speech functionality for Marathi content
-- **AI Integration**: Smart equipment recommendations based on crop, soil, and region
-- **Modern UI/UX**: Responsive design with Tailwind CSS
-- **Secure Authentication**: JWT-based authentication system
-
-## ✨ Features
-
-### 🔐 Authentication & Authorization
-- **JWT-based authentication** with secure token management
-- **Role-based access control** (Farmer, Seller, Admin)
-- **Session management** with cookie-based tokens
-- **Secure password hashing** using bcrypt
-
-### 🌐 Multi-Language Support
-- **Bilingual Interface**: English and Marathi
-- **Dynamic Language Switching**: Real-time text translation
-- **Accessibility**: Text-to-speech functionality for Marathi content
-- **Font Optimization**: Inter (English) and Noto Serif Devanagari (Marathi)
-
-### 👨‍🌾 Farmer Portal
-- **Equipment Browsing**: View available equipment with filters
-- **Advanced Search**: Filter by region, category, and keywords
-- **Booking System**: Easy equipment rental with day selection
-- **Real-time Updates**: Live equipment availability status
-
-### 🏪 Seller Portal
-- **Equipment Management**: Add, edit, and manage equipment listings
-- **Image Upload**: Support for equipment photos
-- **Pricing Control**: Set daily rental rates
-- **Status Tracking**: Monitor approval status of listings
-
-### 👨‍💼 Admin Portal
-- **Listing Approval**: Review and approve/decline equipment listings
-- **Content Management**: Edit and delete listings
-- **User Management**: Monitor platform activity
-- **Quality Control**: Ensure platform standards
-
-### 🤖 AI-Powered Features
-- **Smart Recommendations**: AI-driven equipment suggestions
-- **Multi-Agent System**: Collaborative AI agents for analysis
-- **Crop-Specific Advice**: Tailored recommendations based on crop type
-- **Regional Optimization**: Location-based equipment matching
-
-## 🛠 Technology Stack
-
-### Backend
-- **Node.js** - Runtime environment
-- **Express.js** - Web framework
-- **MongoDB** - NoSQL database
-- **Mongoose** - MongoDB ODM
-- **JWT** - Authentication tokens
-- **Multer** - File upload handling
-- **Bcrypt** - Password hashing
-
-### Frontend
-- **EJS** - Template engine
-- **Tailwind CSS** - Utility-first CSS framework
-- **JavaScript (ES6+)** - Client-side functionality
-- **Web Speech API** - Text-to-speech functionality
-- **Lucide Icons** - Modern icon library
-
-### AI & ML
-- **Python 3.8+** - AI backend
-- **Streamlit** - Web application framework
-- **LangChain** - AI framework
-- **Google Generative AI** - AI model integration
-- **CrewAI** - Multi-agent system
-
-### Development Tools
-- **Nodemon** - Development server
-- **Git** - Version control
-- **npm** - Package management
-
-## 🚀 Installation
-
-### Prerequisites
-- Node.js 18+ 
-- MongoDB 6.0+
-- Python 3.8+
-- Git
-
-### Step 1: Clone the Repository
 ```bash
-git clone https://github.com/yourusername/FarmChain.git
-cd FarmChain
-```
-
-### Step 2: Install Node.js Dependencies
-```bash
+# 1) Install Node deps
 cd webapp
 npm install
-```
 
-### Step 3: Install Python Dependencies
-```bash
+# 2) Install Python deps
 cd ..
-pip install -r requirements.txt
-```
 
-### Step 4: Set Up Environment Variables
-Create a `.env` file in the webapp directory:
-```env
-JWT_SECRET=your-secret-key-here
+
+# 3) Environment (examples)
+cp webapp/.env.example webapp/.env 2>/dev/null || true
+cp .env.example .env 2>/dev/null || true
+
+# Minimum required
+cat <<'EOF' > webapp/.env
+JWT_SECRET=change-me
 MONGODB_URI=mongodb://localhost:27017/farmrent
-```
+EOF
 
-Create a `.env` file in the root directory for AI features:
-```env
-GOOGLE_API_KEY=your-google-api-key-here
-```
+cat <<'EOF' > .env
+GOOGLE_API_KEY=replace-with-your-key
+EOF
 
-### Step 5: Start MongoDB
-```bash
-# macOS
-brew services start mongodb-community
-
-# Ubuntu/Debian
-sudo systemctl start mongodb
-
-# Windows
-# Start MongoDB service from Control Panel
-```
-
-## 💻 Usage
-
-### Running the Main Web Application
-```bash
+# 4) Start services
+# Terminal A: MongoDB (if not already running)
+# Terminal B: Node web app
 cd webapp
-npm run dev
-```
-Access at: http://localhost:3000
+npm start
 
-### Running the AI Recommender
-```bash
+# Terminal C: (optional) Streamlit equipment agent demo
+cd ..
 streamlit run app.py
 ```
-Access at: http://localhost:8501
 
-### Default Admin Credentials
-- **Email**: alishaikhh15@gmail.com
-- **Password**: 123
+Visit: http://localhost:3000
 
-## 🔌 API Documentation
+## Soil AI Workflow
+1) Upload soil report (PDF/image) -> OCR/parse via Python
+2) Extract parameters (pH, N, P, K, Organic Carbon)
+3) Classify with thresholds from `agricultural_config.py`
+4) Generate crop/fertilizer/equipment guidance (LLM + hard rules)
+5) Return JSON + farmer-friendly explanation to the web app
 
-### Authentication Endpoints
-```
-POST /auth/login/:role     - User login (farmer/seller/admin)
-POST /auth/signup/:role    - User registration (farmer/seller)
-GET  /auth/logout          - User logout
-```
+### Key Files
+- `agricultural_config.py` - single source of truth for thresholds, crops, districts, disclaimers
+- `soil_ai_module.py` - extraction, classification, recommendations, explanations
+- `webapp/routes/soil_ai.js` - file upload + bridge to Python AI
 
-### Farmer Endpoints
-```
-GET  /farmer              - Farmer dashboard
-POST /farmer/book/:id     - Book equipment
-```
+## Environment Variables
 
-### Seller Endpoints
-```
-GET  /seller              - Seller dashboard
-POST /seller/add          - Add new equipment listing
-```
+### webapp/.env
+- `JWT_SECRET` (required)
+- `MONGODB_URI` (default: mongodb://localhost:27017/farmrent)
 
-### Admin Endpoints
-```
-GET  /admin               - Admin dashboard
-POST /admin/approve/:id   - Approve listing
-POST /admin/decline/:id   - Decline listing
-POST /admin/delete/:id    - Delete listing
-```
+### .env (project root, AI)
+- `GOOGLE_API_KEY` (required for Gemini)
+- Ollama: ensure `ollama serve` running and model `llama3.2` pulled
 
-## 🤖 AI Features
+## NPM Scripts (webapp)
+- `npm start` - run Express server
+- `npm run dev` - dev mode with nodemon
+- `npm test` - placeholder
 
-### Equipment Recommendation System
-The AI system uses multiple agents to provide intelligent equipment recommendations:
+## Python Utilities
+- `python3 soil_ai_api.py` - stdin/stdout bridge used by Node
+- `python3 -m py_compile soil_ai_module.py` - quick syntax check
 
-1. **Crop Analysis Agent**: Analyzes crop requirements and growth patterns
-2. **Soil Analysis Agent**: Evaluates soil type and conditions
-3. **Regional Agent**: Considers local farming practices and climate
-4. **Equipment Agent**: Matches equipment to specific needs
-5. **Coordinator Agent**: Synthesizes recommendations from all agents
+## API Surface (selected)
+- POST `/auth/login/:role` - Login (farmer/seller/admin)
+- POST `/auth/signup/:role` - Register (farmer/seller)
+- GET  `/farmer`, `/seller`, `/admin` - Role dashboards
+- POST `/soil-ai/extract` - OCR/PDF text extraction
+- POST `/soil-ai/analyze` - Soil analysis + recommendations
 
-### Input Parameters
-- **Crop Type**: Wheat, Rice, Sugarcane, Maize, Cotton, Millet, Pulses
-- **Soil Type**: Loamy, Clayey, Sandy, Alluvial, Black
-- **Season**: Rabi, Kharif
-- **Region**: Multiple Indian states
+## Testing Checklist
+- MongoDB running locally
+- `npm start` in `webapp/`
+- For AI flows: Ollama running, `GOOGLE_API_KEY` set, Python deps installed
+- Optional: `python3 -m py_compile soil_ai_module.py`
 
-### Output
-- **Personalized Recommendations**: Tailored equipment suggestions
-- **Detailed Analysis**: Comprehensive reasoning for recommendations
-- **Cost Optimization**: Budget-friendly equipment options
+## Contributing
+- Fork -> branch -> PR
+- Keep linting/formatting consistent
+- Add tests or samples for new features
 
-## 📱 Screenshots
-
-### Home Page
-![Home Page](screenshots/home.png)
-
-### Farmer Portal
-![Farmer Portal](screenshots/farmer.png)
-
-### Seller Portal
-![Seller Portal](screenshots/seller.png)
-
-### Admin Portal
-![Admin Portal](screenshots/admin.png)
-
-### AI Recommender
-![AI Recommender](screenshots/ai-recommender.png)
-
-## 🌍 Language Support
-
-### English Interface
-- Clean, professional design
-- International accessibility
-- Standard web fonts
-
-### Marathi Interface
-- Native language support
-- Text-to-speech functionality
-- Devanagari script optimization
-- Cultural context awareness
-
-### Language Switching
-- Real-time language switching
-- Persistent language preferences
-- Seamless user experience
-
-## 🔒 Security Features
-
-- **JWT Authentication**: Secure token-based authentication
-- **Password Hashing**: Bcrypt encryption for passwords
-- **Input Validation**: Server-side validation for all inputs
-- **File Upload Security**: Secure image upload handling
-- **CORS Protection**: Cross-origin resource sharing protection
-- **Session Management**: Secure session handling
-
-## 📊 Database Schema
-
-### User Model
-```javascript
-{
-  name: String,
-  email: String,
-  password: String (hashed),
-  role: String (farmer/seller/admin),
-  createdAt: Date
-}
-```
-
-### Listing Model
-```javascript
-{
-  name: String,
-  category: String,
-  region: String,
-  pricePerDay: Number,
-  sellerName: String,
-  img: String,
-  status: String (pending/approved/declined),
-  createdAt: Date
-}
-```
-
-## 🚀 Deployment
-
-### Heroku Deployment
-```bash
-# Install Heroku CLI
-heroku create your-farmchain-app
-heroku config:set JWT_SECRET=your-secret-key
-heroku config:set MONGODB_URI=your-mongodb-uri
-git push heroku main
-```
-
-### Vercel Deployment
-```bash
-# Install Vercel CLI
-npm i -g vercel
-vercel
-```
-
-## 🤝 Contributing
-
-We welcome contributions! Please follow these steps:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-### Development Guidelines
-- Follow ESLint configuration
-- Write meaningful commit messages
-- Add tests for new features
-- Update documentation
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 👥 Team
-
-- **Ali Shaikh** - Full Stack Developer & AI Integration
-- **Contributors** - Open source contributors
-
-## 📞 Support
-
-- **Email**: support@farmchain.com
-- **Documentation**: [Wiki](https://github.com/yourusername/FarmChain/wiki)
-- **Issues**: [GitHub Issues](https://github.com/yourusername/FarmChain/issues)
-
-## 🙏 Acknowledgments
-
-- **MongoDB** for database solutions
-- **Tailwind CSS** for styling framework
-- **Google AI** for AI capabilities
-- **Open Source Community** for various libraries and tools
-
----
-
-<div align="center">
-  <p>Made with ❤️ for the farming community</p>
-  <p>🌾 Empowering Agriculture Through Technology 🌾</p>
-</div>
+## License
+MIT
+npm install
