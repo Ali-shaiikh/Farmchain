@@ -15,12 +15,6 @@ app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 app.use(express.static(path.join(__dirname, "public")));
 
-// Debug: Log all requests
-app.use((req, res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-    next();
-});
-
 app.use(async (req, res, next) => {
     const token = req.cookies.token;
     if (token) {
@@ -56,11 +50,6 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 app.get("/", (req, res) => {
     res.render("home");
-});
-
-// Test route to verify server is working
-app.get("/test-route", (req, res) => {
-    res.send("Test route works!");
 });
 
 // Direct soil-ai route handlers (guaranteed to work)

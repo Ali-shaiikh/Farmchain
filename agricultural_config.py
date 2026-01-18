@@ -62,6 +62,52 @@ SEASON_CROPS = {
 }
 
 # ============================================================================
+# TYPICAL CROP DURATIONS (days)
+# Source: Common agronomic ranges for Maharashtra
+# ============================================================================
+CROP_DURATIONS = {
+    # Rabi staples
+    "Wheat": "110-130 days",
+    "Gram": "90-110 days",
+    "Mustard": "90-120 days",
+    "Sunflower": "90-100 days",
+    "Onion": "100-120 days",
+    "Tomato": "90-110 days",
+    "Potato": "90-120 days",
+    "Garlic": "150-180 days",
+    "Fenugreek": "90-100 days",
+    "Coriander": "75-90 days",
+
+    # Kharif staples
+    "Soybean": "90-110 days",
+    "Tur": "150-180 days",
+    "Cotton": "150-180 days",
+    "Maize": "90-120 days",
+    "Rice": "120-150 days",
+    "Bajra": "80-100 days",
+    "Jowar": "95-110 days",
+    "Groundnut": "120-150 days",
+    "Sugarcane": "300-365 days",
+
+    # Summer vegetables/fruits
+    "Watermelon": "70-90 days",
+    "Muskmelon": "70-90 days",
+    "Cucumber": "50-70 days",
+    "Bitter Gourd": "90-110 days",
+    "Okra": "60-80 days",
+}
+
+def get_crop_durations(crops: list) -> dict:
+    """Return duration strings for provided crops using standard mappings."""
+    if not crops:
+        return {}
+    result = {}
+    for c in crops:
+        key = str(c).strip()
+        result[key] = CROP_DURATIONS.get(key, "90-120 days")
+    return result
+
+# ============================================================================
 # CROP FERTILITY REQUIREMENTS
 # ============================================================================
 HIGH_INPUT_CROPS = [

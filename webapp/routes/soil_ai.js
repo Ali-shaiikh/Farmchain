@@ -98,8 +98,10 @@ async function extractPDFText(filePath) {
     return new Promise((resolve, reject) => {
         const projectRoot = path.join(__dirname, "../..");
         const pythonScript = path.join(projectRoot, "extract_pdf.py");
+        // Use venv Python interpreter (venv is at FarmChain/.venv)
+        const pythonExe = path.join(projectRoot, "..", ".venv", "bin", "python");
         
-        const pythonProcess = spawn("python3", [pythonScript, filePath], {
+        const pythonProcess = spawn(pythonExe, [pythonScript, filePath], {
             cwd: projectRoot
         });
 
@@ -129,8 +131,10 @@ async function extractImageText(filePath) {
     return new Promise((resolve, reject) => {
         const projectRoot = path.join(__dirname, "../..");
         const pythonScript = path.join(projectRoot, "extract_image.py");
+        // Use venv Python interpreter (venv is at FarmChain/.venv)
+        const pythonExe = path.join(projectRoot, "..", ".venv", "bin", "python");
         
-        const pythonProcess = spawn("python3", [pythonScript, filePath], {
+        const pythonProcess = spawn(pythonExe, [pythonScript, filePath], {
             cwd: projectRoot
         });
 
@@ -241,8 +245,6 @@ router.post("/analyze", async (req, res) => {
         pythonProcess.stderr.on("data", (data) => {
             const stderrData = data.toString();
             errorOutput += stderrData;
-            // Always log Python stderr (contains debug messages)
-            console.error("[Python stderr]", stderrData);
         });
 
         pythonProcess.on("close", (code) => {
@@ -260,30 +262,11 @@ router.post("/analyze", async (req, res) => {
                 });
             }
 
-            // Log stderr even on success (for debug messages)
-            if (errorOutput) {
-                console.log("[Python debug output]:", errorOutput);
-            }
-
             try {
                 const result = JSON.parse(output.trim());
                 
-                // DEBUG: Log the raw result from Python
-                console.log("🔍 [Node.js] Raw Python result keys:", Object.keys(result));
-                console.log("🔍 [Node.js] Has explanation:", !!result.explanation);
-                if (result.explanation) {
-                    console.log("🔍 [Node.js] Explanation keys:", Object.keys(result.explanation));
-                    console.log("🔍 [Node.js] Summary:", result.explanation.summary);
-                } else {
-                    console.error("❌ [Node.js] CRITICAL: Explanation missing from Python response!");
-                    console.error("❌ [Node.js] Full result:", JSON.stringify(result, null, 2));
-                }
-                
                 // SAFETY CHECK: Ensure explanation is always present
                 if (!result.explanation) {
-                    console.error("❌ CRITICAL: Explanation missing from backend response!");
-                    console.error("Response keys:", Object.keys(result));
-                    // Add minimal explanation if missing
                     result.explanation = {
                         summary: "Unable to generate explanation.",
                         disclaimer: "This recommendation is based on soil reports, district conditions, and standard agriculture guidelines. Please consult your local agriculture officer for final decisions."
@@ -292,42 +275,9 @@ router.post("/analyze", async (req, res) => {
                 
                 // Ensure summary exists in explanation
                 if (!result.explanation.summary && !result.explanation.content) {
-                    console.error("❌ CRITICAL: Explanation summary missing!");
                     result.explanation.summary = "Unable to generate explanation summary.";
                 }
                 
-                // FINAL VERIFICATION: Log before sending to frontend
-                console.log("🔍 [Node.js] FINAL RESULT being sent:", {
-                    has_explanation: !!result.explanation,
-                    explanation_keys: result.explanation ? Object.keys(result.explanation) : [],
-                    has_summary: !!result.explanation?.summary,
-                    summary_preview: result.explanation?.summary?.substring(0, 50) || "MISSING"
-                });
-                
-                // #region agent log
-                // Debug logging - fail silently if endpoint unavailable (prevents 404 console errors)
-                try {
-                  fetch('http://127.0.0.1:7242/ingest/ace7d4ff-0dbd-4417-a3b5-c830b918565a',{
-                    method:'POST',
-                    headers:{'Content-Type':'application/json'},
-                    body:JSON.stringify({
-                      location:'soil_ai.js:261',
-                      message:'BEFORE res.json: result explanation check',
-                      data:{
-                        has_explanation:!!result.explanation,
-                        explanation_keys:result.explanation?Object.keys(result.explanation):[],
-                        has_summary:!!result.explanation?.summary,
-                        has_advisory:!!result.explanation?.advisory,
-                        timestamp:Date.now(),
-                        sessionId:'debug-session',
-                        runId:'run1',
-                        hypothesisId:'C'
-                      }
-                    }),
-                    signal:AbortSignal.timeout(100) // Timeout quickly to avoid hanging
-                  }).catch(()=>{}); // Silently handle errors
-                } catch(e) {} // Ignore any fetch errors
-                // #endregion
                 res.json(result);
             } catch (parseError) {
                 console.error("Parse error:", parseError);
@@ -353,6 +303,59 @@ router.post("/analyze", async (req, res) => {
                 disclaimer: "This recommendation is based on soil reports, district conditions, and standard agriculture guidelines. Please consult your local agriculture officer for final decisions."
             }
         });
+    }
+});
+
+// POST: Lightweight chat with Ollama (Maharashtra farming expert)
+router.post("/chat", async (req, res) => {
+    try {
+        const { message, context, language } = req.body || {};
+        if (!message || !message.trim()) {
+            return res.status(400).json({ success: false, error: "Message is required" });
+        }
+
+        const lang = (language || 'english').toLowerCase();
+        const isMarathi = lang.includes('marathi');
+        
+        const systemPrompt = isMarathi
+            ? "तुम्ही एक मराठी कृषी विशेषज्ञ आहात. महाराष्ट्रातील शेतीबाड़ी, पिके, माती, सिंचन आणि उत्पादन तंत्रांविषयी छोटे, सरळ उत्तरे द्या. केवळ मराठीतच उत्तर द्या. इतर भाषांचा वापर करू नका. शेतकऱ्यांसाठी व्यावहारिक सल्ला द्या."
+            : "You are a concise, practical Maharashtra farming expert. Answer only in English about crops, soil, irrigation, and farming best practices in Maharashtra. Keep answers short and actionable. Do not use other languages. Focus on English only.";
+        
+        const userContent = context ? `Context: ${context}\nQuestion: ${message}` : message;
+
+        const ollamaUrl = "http://localhost:11434/api/chat";
+        const response = await fetch(ollamaUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                model: "llama3.2",
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userContent }
+                ],
+                options: { temperature: 0.2 },
+                stream: false
+            })
+        });
+
+        const raw = await response.text();
+        if (!response.ok) {
+            return res.status(500).json({ success: false, error: "Ollama error", details: raw });
+        }
+
+        // Ollama might send multiple JSON objects when streaming is mis-set; guard parse
+        let data = {};
+        try {
+            data = JSON.parse(raw.trim().split("\n").filter(Boolean).pop() || "{}" );
+        } catch (e) {
+            return res.status(500).json({ success: false, error: "Parse error", details: raw });
+        }
+
+        const reply = data?.message?.content || "";
+        return res.json({ success: true, reply });
+    } catch (error) {
+        console.error("Chat error:", error);
+        return res.status(500).json({ success: false, error: error.message || "Chat failed" });
     }
 });
 

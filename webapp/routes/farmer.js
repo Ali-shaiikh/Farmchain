@@ -82,29 +82,4 @@ router.post("/book/:listingId", verifyToken, requireFarmer, async (req, res) => 
     }
 });
 
-router.get("/debug", verifyToken, requireFarmer, async (req, res) => {
-    try {
-        const allListings = await Listing.find({});
-        const uniqueRegions = [...new Set(allListings.map(l => l.region))];
-        const uniqueCategories = [...new Set(allListings.map(l => l.category))];
-        const uniqueStatuses = [...new Set(allListings.map(l => l.status))];
-
-        res.json({
-            totalListings: allListings.length,
-            uniqueRegions,
-            uniqueCategories,
-            uniqueStatuses,
-            sampleListings: allListings.slice(0, 5).map(l => ({
-                name: l.name,
-                region: l.region,
-                category: l.category,
-                status: l.status
-            }))
-        });
-    } catch (error) {
-        console.error("Debug error:", error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
 module.exports = router;
