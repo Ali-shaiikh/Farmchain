@@ -28,6 +28,7 @@
   <div class="flex justify-end mb-4">
     <button type="button" class="lang-btn active" onclick="window.FarmChainSpeech.setLanguage('en')" data-lang="en">English</button>
     <button type="button" class="lang-btn" onclick="window.FarmChainSpeech.setLanguage('mr')" data-lang="mr">मराठी</button>
+    <a href="/analytics/farmer" class="ml-3 px-4 py-2 rounded bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition speakable" data-en="Analytics" data-mr="विश्लेषण">Analytics</a>
   </div>
 
   <h1 class="text-2xl font-semibold mb-4 text-center speakable" data-en="Welcome, <%= farmerName %>!" data-mr="आपले स्वागत आहे, <%= farmerName %>!">
@@ -46,16 +47,16 @@
       <% }); %>
     </select>
 
-    <select name="category" class="border p-2 rounded">
+    <select name="category" class="border p-2 rounded category-select">
       <option value="all" data-en="All Categories" data-mr="सर्व श्रेण्या">All Categories</option>
       <% CATEGORIES.forEach(function(c) { %>
-        <option value="<%= c %>" <%= category === c ? 'selected' : '' %>>
-          <%= CATEGORY_TRANSLATIONS[c] || c %>
+        <option value="<%= c %>" data-en="<%= c %>" data-mr="<%= CATEGORY_TRANSLATIONS[c] || c %>" <%= category === c ? 'selected' : '' %>>
+          <%= c %>
         </option>
       <% }); %>
     </select>
 
-    <input type="text" name="q" placeholder="Search..." class="border p-2 rounded flex-1" value="<%= query %>"/>
+    <input type="text" name="q" placeholder="Search..." data-placeholder-en="Search..." data-placeholder-mr="शोध करा..." class="border p-2 rounded flex-1" value="<%= query %>"/>
     <button class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded transition speakable" data-en="Filter" data-mr="फिल्टर करा">
       Filter
     </button>
@@ -79,7 +80,7 @@
           </p>
 
           <form method="POST" action="/farmer/book/<%= l._id %>" class="flex gap-2 items-center">
-            <input type="number" name="days" placeholder="Days" class="border p-1 rounded w-20" min="1" required/>
+            <input type="number" name="days" placeholder="Days" data-placeholder-en="Days" data-placeholder-mr="दिवस" class="border p-1 rounded w-20" min="1" required/>
             <button class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded transition speakable" data-en="Book" data-mr="बुक करा">
               Book
             </button>

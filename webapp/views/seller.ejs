@@ -28,6 +28,7 @@
   <div class="flex justify-end mb-4">
     <button type="button" class="lang-btn active" onclick="window.FarmChainSpeech.setLanguage('en')" data-lang="en">English</button>
     <button type="button" class="lang-btn" onclick="window.FarmChainSpeech.setLanguage('mr')" data-lang="mr">मराठी</button>
+    <a href="/analytics/seller" class="ml-3 px-4 py-2 rounded bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition speakable" data-en="Analytics" data-mr="विश्लेषण">Analytics</a>
   </div>
 
   <h1 class="text-3xl font-bold text-emerald-700 mb-8 text-center speakable" data-en="Seller Dashboard" data-mr="विक्रेता डॅशबोर्ड">
@@ -44,11 +45,11 @@
       Add New Listing
     </h2>
     <div class="grid sm:grid-cols-2 gap-4">
-      <input type="text" name="sellerName" placeholder="Seller Name" class="border p-3 rounded-lg focus:ring-2 focus:ring-emerald-400 focus:outline-none" required>
-      <input type="text" name="name" placeholder="Equipment Name" class="border p-3 rounded-lg focus:ring-2 focus:ring-emerald-400 focus:outline-none" required>
-      <select name="category" class="border p-3 rounded-lg focus:ring-2 focus:ring-emerald-400 focus:outline-none" required>
+      <input type="text" name="sellerName" placeholder="Seller Name" data-placeholder-en="Seller Name" data-placeholder-mr="विक्रेत्याचे नाव" class="border p-3 rounded-lg focus:ring-2 focus:ring-emerald-400 focus:outline-none" required>
+      <input type="text" name="name" placeholder="Equipment Name" data-placeholder-en="Equipment Name" data-placeholder-mr="उपकरणाचे नाव" class="border p-3 rounded-lg focus:ring-2 focus:ring-emerald-400 focus:outline-none" required>
+      <select name="category" class="border p-3 rounded-lg focus:ring-2 focus:ring-emerald-400 focus:outline-none category-select" required>
         <% CATEGORIES.forEach(c => { %>
-          <option value="<%= c %>"><%= CATEGORY_TRANSLATIONS[c] || c %></option>
+          <option value="<%= c %>" data-en="<%= c %>" data-mr="<%= CATEGORY_TRANSLATIONS[c] || c %>"><%= c %></option>
         <% }) %>
       </select>
       <select name="region" class="border p-3 rounded-lg focus:ring-2 focus:ring-emerald-400 focus:outline-none" required>
@@ -56,7 +57,7 @@
           <option value="<%= r %>"><%= r %></option>
         <% }) %>
       </select>
-      <input type="number" name="pricePerDay" placeholder="Price per day (₹)" class="border p-3 rounded-lg focus:ring-2 focus:ring-emerald-400 focus:outline-none" required>
+      <input type="number" name="pricePerDay" placeholder="Price per day (₹)" data-placeholder-en="Price per day (₹)" data-placeholder-mr="प्रतिदिन किंमत (₹)" class="border p-3 rounded-lg focus:ring-2 focus:ring-emerald-400 focus:outline-none" required>
       <input type="file" name="img" accept="image/*" class="border p-3 col-span-2 rounded-lg focus:ring-2 focus:ring-emerald-400 focus:outline-none">
     </div>
     <button type="submit" class="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-6 py-2 rounded-xl transition duration-300 speakable" data-en="Add Listing" data-mr="यंत्र जोडा">

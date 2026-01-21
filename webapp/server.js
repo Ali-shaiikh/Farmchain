@@ -9,6 +9,27 @@ const authRoutes = require("./routes/auth");
 
 const app = express();
 
+// Disable etag to avoid 304 on dynamic pages like analytics
+app.disable("etag");
+
+// Strip conditional request headers and add no-store by default
+app.use((req, res, next) => {
+    delete req.headers["if-none-match"];
+    delete req.headers["if-modified-since"];
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
+    next();
+});
+
+// Simple request logger to confirm route execution and status codes
+app.use((req, res, next) => {
+    const start = Date.now();
+    res.on("finish", () => {
+        const ms = Date.now() - start;
+        console.log(`[${req.method}] ${req.originalUrl} -> ${res.statusCode} (${ms}ms)`);
+    });
+    next();
+});
+
 app.use(express.json());
 app.use(cookieParser());
 app.set("view engine", "ejs");
@@ -92,6 +113,7 @@ app.use("/auth", authRoutes);
 app.use("/farmer", require("./routes/farmer"));
 app.use("/seller", require("./routes/seller"));
 app.use("/admin", require("./routes/admin"));
+app.use("/analytics", require("./routes/analytics"));
 
 // Register soil-ai router for POST /soil-ai/analyze only
 try {

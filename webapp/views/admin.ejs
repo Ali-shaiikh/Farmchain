@@ -28,6 +28,11 @@
     <button type="button" class="lang-btn" onclick="window.FarmChainSpeech.setLanguage('mr')" data-lang="mr">मराठी</button>
   </div>
 
+  <script>
+    // Expose token for forms if present in query
+    window.__ADMIN_TOKEN__ = "<%= token || '' %>";
+  </script>
+
   <h1 class="text-3xl font-bold text-emerald-700 mb-6 text-center speakable" data-en="Admin Dashboard" data-mr="प्रशासक डॅशबोर्ड">
     Admin Dashboard
   </h1>
@@ -44,9 +49,11 @@
             <p class="text-sm text-gray-600 font-medium mb-2 speakable">₹<%= l.pricePerDay %>/day</p>
             <div class="flex gap-2 mt-auto">
               <form method="POST" action="/admin/approve/<%= l._id %>">
+                <input type="hidden" name="token" value="<%= token %>">
                 <button class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded speakable" data-en="Approve" data-mr="मंजूर करा">Approve</button>
               </form>
               <form method="POST" action="/admin/decline/<%= l._id %>">
+                <input type="hidden" name="token" value="<%= token %>">
                 <button class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded speakable" data-en="Decline" data-mr="नकार द्या">Decline</button>
               </form>
             </div>
@@ -73,6 +80,7 @@
                 <button class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded speakable" data-en="Edit" data-mr="संपादित करा">Edit</button>
               </form>
               <form method="POST" action="/admin/delete/<%= l._id %>">
+                <input type="hidden" name="token" value="<%= token %>">
                 <button class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded speakable" data-en="Delete" data-mr="हटवा">Delete</button>
               </form>
             </div>

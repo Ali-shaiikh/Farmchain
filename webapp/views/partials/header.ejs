@@ -1,21 +1,30 @@
 <nav class="bg-green-600 text-white px-6 py-4 flex justify-between items-center">
-    <div class="text-xl font-bold">
-      <a href="/" class="speakable" data-mr="फार्मचेन">फार्मचेन</a>
-    </div>
-  
+  <div class="text-xl font-bold">
+    <a href="/" class="speakable" data-en="FarmChain" data-mr="फार्मचेन">FarmChain</a>
+  </div>
+
+  <div class="flex items-center gap-4">
+    <% if (typeof showLangSwitch !== 'undefined' && showLangSwitch) { %>
+      <div class="flex items-center gap-2 bg-white/10 border border-white/20 rounded-full px-2 py-1">
+        <button type="button" class="px-3 py-1 rounded-full text-sm font-semibold bg-white text-green-700" onclick="window.FarmChainSpeech.setLanguage('en')" data-lang="en">English</button>
+        <button type="button" class="px-3 py-1 rounded-full text-sm font-semibold bg-transparent text-white border border-white/40" onclick="window.FarmChainSpeech.setLanguage('mr')" data-lang="mr">मराठी</button>
+      </div>
+    <% } %>
+
     <ul class="flex space-x-6 items-center">
       <% if (typeof user !== 'undefined' && user) { %>
-        <li class="speakable" data-mr="आपले स्वागत आहे, <%= user.name %>">आपले स्वागत आहे, <span class="font-semibold"><%= user.name %></span> (<%= user.role %>)</li>
+        <li class="speakable" data-en="Welcome, <%= user.name %>" data-mr="आपले स्वागत आहे, <%= user.name %>">Welcome, <span class="font-semibold"><%= user.name %></span> (<%= user.role %>)</li>
 
         <% if (user.role === "farmer") { %>
-          <li><a href="/farmer" class="hover:underline speakable" data-mr="डॅशबोर्ड">डॅशबोर्ड</a></li>
+          <li><a href="/farmer" class="hover:underline speakable" data-en="Dashboard" data-mr="डॅशबोर्ड">Dashboard</a></li>
         <% } else if (user.role === "seller") { %>
-          <li><a href="/seller" class="hover:underline speakable" data-mr="डॅशबोर्ड">डॅशबोर्ड</a></li>
+          <li><a href="/seller" class="hover:underline speakable" data-en="Dashboard" data-mr="डॅशबोर्ड">Dashboard</a></li>
         <% } else if (user.role === "admin") { %>
-          <li><a href="/admin" class="hover:underline speakable" data-mr="प्रशासक">प्रशासक</a></li>
+          <li><a href="/admin" class="hover:underline speakable" data-en="Admin" data-mr="प्रशासक">Admin</a></li>
         <% } %>
 
-        <li><a href="/auth/logout" class="bg-red-500 px-4 py-2 rounded-lg hover:bg-red-600 transition-colors speakable" data-mr="लॉगआउट">लॉगआउट</a></li>
+        <li><a href="/auth/logout" class="bg-red-500 px-4 py-2 rounded-lg hover:bg-red-600 transition-colors speakable" data-en="Logout" data-mr="लॉगआउट">Logout</a></li>
       <% } %>
     </ul>
+  </div>
 </nav>

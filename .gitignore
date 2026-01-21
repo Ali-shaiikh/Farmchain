@@ -18,3 +18,4 @@ webapp/public/uploads/
 
 # OS
 .DS_Store
+webapp/public/video/*.mp4

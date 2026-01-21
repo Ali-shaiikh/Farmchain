@@ -62,16 +62,24 @@ router.post("/book/:listingId", verifyToken, requireFarmer, async (req, res) => 
     const lang = req.query.lang || 'en';
 
     try {
+        if (!req.params.listingId || !req.user || !req.user.userId) {
+            return res.status(400).send("Invalid request");
+        }
+
         const listing = await Listing.findById(req.params.listingId);
         if (!listing) return res.status(404).send("Listing not found");
 
-        const amount = listing.pricePerDay * Math.max(1, Number(days));
+        if (!days || Number(days) < 1) {
+            return res.status(400).send("Days must be at least 1");
+        }
+
+        const amount = listing.pricePerDay * Number(days);
 
         await Booking.create({
             listing: listing._id,
             farmer: req.user.userId,
             from: new Date(),
-            to: new Date(Date.now() + 86400000 * Math.max(1, Number(days))),
+            to: new Date(Date.now() + 86400000 * Number(days)),
             amount,
         });
 

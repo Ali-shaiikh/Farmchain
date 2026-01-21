@@ -22,11 +22,11 @@
       transition: transform 0.3s;
     }
     .card:hover { transform: translateY(-4px); }
-    nav { position: fixed; top: 0; left: 0; right: 0; z-index: 50; background: rgba(247,244,237,0.95); backdrop-filter: blur(4px); border-bottom: 1px solid #e5e7eb; }
-    .nav-link { color: #2d2a26; padding: 0.5rem 1rem; text-decoration: none; position: relative; }
-    .nav-link::after { content: ''; position: absolute; bottom: 0; left: 0; width: 0; height: 2px; background: linear-gradient(135deg, #2f855a, #68d391); transition: width 0.3s; }
+    nav { position: fixed; top: 0; left: 0; right: 0; z-index: 50; background: #059669; backdrop-filter: blur(4px); border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .nav-link { color: #ffffff; padding: 0.5rem 1rem; text-decoration: none; position: relative; }
+    .nav-link::after { content: ''; position: absolute; bottom: 0; left: 0; width: 0; height: 2px; background: linear-gradient(135deg, #ffffff, #d1fae5); transition: width 0.3s; }
     .nav-link:hover::after { width: 100%; }
-    .mobile-menu { display: none; position: absolute; top: 100%; left: 0; right: 0; background: #f7f4ed; padding: 1rem; }
+    .mobile-menu { display: none; position: absolute; top: 100%; left: 0; right: 0; background: #059669; padding: 1rem; }
     .mobile-menu.active { display: block; }
     @media (min-width: 768px) { .mobile-hidden { display: flex; } .mobile-menu-btn { display: none; } .md\:grid-cols-3 { grid-template-columns: repeat(3, 1fr); } }
     @media (max-width: 767px) { .mobile-hidden { display: none; } }
@@ -43,15 +43,15 @@
   <nav>
     <div class="container flex justify-between items-center h-16">
       <div class="flex items-center gap-2">
-        <i data-lucide="sprout" class="w-6 h-6 p-2 rounded-lg text-green-700 bg-green-100"></i>
-        <span class="text-xl font-bold speakable" data-en="FarmChain" data-mr="फार्मचेन">FarmChain</span>
+        <i data-lucide="sprout" class="w-6 h-6 p-2 rounded-lg text-white bg-green-700"></i>
+        <span class="text-xl font-bold text-white speakable" data-en="FarmChain" data-mr="फार्मचेन">FarmChain</span>
       </div>
       <div class="mobile-hidden items-center gap-6">
         <a href="#features" class="nav-link speakable" data-en="Features" data-mr="वैशिष्ट्ये">Features</a>
         <a href="#testimonials" class="nav-link speakable" data-en="Testimonials" data-mr="प्रशंसापत्रे">Testimonials</a>
         <a href="#contact" class="nav-link speakable" data-en="Contact" data-mr="संपर्क">Contact</a>
         <% if (typeof user !== 'undefined' && user) { %>
-          <span class="text-sm text-gray-600 speakable" data-en="Welcome, <%= user.name %>" data-mr="स्वागत आहे, <%= user.name %>">Welcome, <%= user.name %></span>
+          <span class="text-sm text-white speakable" data-en="Welcome, <%= user.name %>" data-mr="स्वागत आहे, <%= user.name %>">Welcome, <%= user.name %></span>
           <% if (user.role === "farmer") { %>
             <a href="/farmer" class="lang-btn speakable" data-en="Farmer Dashboard" data-mr="शेतकरी डॅशबोर्ड">Farmer Dashboard</a>
           <% } else if (user.role === "seller") { %>
@@ -60,39 +60,31 @@
             <a href="/admin" class="lang-btn speakable" data-en="Admin Dashboard" data-mr="प्रशासक डॅशबोर्ड">Admin Dashboard</a>
           <% } %>
           <a href="/auth/logout" class="lang-btn bg-red-500 hover:bg-red-600 text-white speakable" data-en="Logout" data-mr="लॉगआउट">Logout</a>
-        <% } else { %>
-          <a href="/auth/login/farmer" class="lang-btn" data-en="Farmer Login" data-mr="शेतकरी लॉगिन">Farmer Login</a>
-          <a href="/auth/login/seller" class="lang-btn" data-en="Seller Login" data-mr="विक्रेता लॉगिन">Seller Login</a>
-          <a href="/auth/login/admin" class="lang-btn" data-en="Admin Login" data-mr="प्रशासक लॉगिन">Admin Login</a>
         <% } %>
         <button class="lang-btn active" onclick="window.FarmChainSpeech.setLanguage('en')" data-lang="en">English</button>
         <button class="lang-btn" onclick="window.FarmChainSpeech.setLanguage('mr')" data-lang="mr">मराठी</button>
       </div>
       <button class="mobile-menu-btn p-2" onclick="toggleMobileMenu()">
-        <i data-lucide="menu" id="menu-icon" class="w-6 h-6"></i>
-        <i data-lucide="x" id="close-icon" class="w-6 h-6 hidden"></i>
+        <i data-lucide="menu" id="menu-icon" class="w-6 h-6 text-white"></i>
+        <i data-lucide="x" id="close-icon" class="w-6 h-6 text-white hidden"></i>
       </button>
       <div id="mobile-menu" class="mobile-menu">
-        <a href="#features" class="block p-2 speakable" data-en="Features" data-mr="वैशिष्ट्ये">Features</a>
-        <a href="#testimonials" class="block p-2 speakable" data-en="Testimonials" data-mr="प्रशंसापत्रे">Testimonials</a>
-        <a href="#contact" class="block p-2 speakable" data-en="Contact" data-mr="संपर्क">Contact</a>
+        <a href="#features" class="block p-2 text-white speakable" data-en="Features" data-mr="वैशिष्ट्ये">Features</a>
+        <a href="#testimonials" class="block p-2 text-white speakable" data-en="Testimonials" data-mr="प्रशंसापत्रे">Testimonials</a>
+        <a href="#contact" class="block p-2 text-white speakable" data-en="Contact" data-mr="संपर्क">Contact</a>
         <% if (typeof user !== 'undefined' && user) { %>
-          <span class="block p-2 text-sm text-gray-600 speakable" data-en="Welcome, <%= user.name %>" data-mr="स्वागत आहे, <%= user.name %>">Welcome, <%= user.name %></span>
+          <span class="block p-2 text-sm text-white speakable" data-en="Welcome, <%= user.name %>" data-mr="स्वागत आहे, <%= user.name %>">Welcome, <%= user.name %></span>
           <% if (user.role === "farmer") { %>
-            <a href="/farmer" class="block p-2 speakable" data-en="Farmer Dashboard" data-mr="शेतकरी डॅशबोर्ड">Farmer Dashboard</a>
+            <a href="/farmer" class="block p-2 text-white speakable" data-en="Farmer Dashboard" data-mr="शेतकरी डॅशबोर्ड">Farmer Dashboard</a>
           <% } else if (user.role === "seller") { %>
-            <a href="/seller" class="block p-2 speakable" data-en="Seller Dashboard" data-mr="विक्रेता डॅशबोर्ड">Seller Dashboard</a>
+            <a href="/seller" class="block p-2 text-white speakable" data-en="Seller Dashboard" data-mr="विक्रेता डॅशबोर्ड">Seller Dashboard</a>
           <% } else if (user.role === "admin") { %>
-            <a href="/admin" class="block p-2 speakable" data-en="Admin Dashboard" data-mr="प्रशासक डॅशबोर्ड">Admin Dashboard</a>
+            <a href="/admin" class="block p-2 text-white speakable" data-en="Admin Dashboard" data-mr="प्रशासक डॅशबोर्ड">Admin Dashboard</a>
           <% } %>
           <a href="/auth/logout" class="block p-2 bg-red-500 hover:bg-red-600 text-white speakable" data-en="Logout" data-mr="लॉगआउट">Logout</a>
-        <% } else { %>
-          <a href="/auth/login/farmer" class="block p-2" data-en="Farmer Login" data-mr="शेतकरी लॉगिन">Farmer Login</a>
-          <a href="/auth/login/seller" class="block p-2" data-en="Seller Login" data-mr="विक्रेता लॉगिन">Seller Login</a>
-          <a href="/auth/login/admin" class="block p-2" data-en="Admin Login" data-mr="प्रशासक लॉगिन">Admin Login</a>
         <% } %>
-        <button class="lang-btn block p-2 active" onclick="window.FarmChainSpeech.setLanguage('en')" data-lang="en">English</button>
-        <button class="lang-btn block p-2" onclick="window.FarmChainSpeech.setLanguage('mr')" data-lang="mr">मराठी</button>
+        <button class="lang-btn block p-2 text-white active" onclick="window.FarmChainSpeech.setLanguage('en')" data-lang="en">English</button>
+        <button class="lang-btn block p-2 text-white" onclick="window.FarmChainSpeech.setLanguage('mr')" data-lang="mr">मराठी</button>
       </div>
     </div>
   </nav>

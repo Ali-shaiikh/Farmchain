@@ -216,6 +216,8 @@ router.post("/analyze", async (req, res) => {
         // Call Python API script via stdin
         const projectRoot = path.join(__dirname, "../..");
         const pythonScript = path.join(projectRoot, "soil_ai_api.py");
+        const venvPython = path.join(projectRoot, "..", ".venv", "bin", "python");
+        const pythonExe = require("fs").existsSync(venvPython) ? venvPython : "python3";
         
         const inputData = JSON.stringify({
             report_text: report_text,
@@ -226,13 +228,30 @@ router.post("/analyze", async (req, res) => {
             language: language || "marathi"
         });
         
-        const pythonProcess = spawn("python3", [pythonScript], {
+        const pythonProcess = spawn(pythonExe, [pythonScript], {
             cwd: projectRoot,
             stdio: ['pipe', 'pipe', 'pipe']
         });
 
         let output = "";
         let errorOutput = "";
+
+        // Hard timeout to avoid hanging when model download or env issues occur
+        const timeoutMs = 60000; // 60s
+        const timeout = setTimeout(() => {
+            console.error("Soil AI python timed out after", timeoutMs, "ms");
+            pythonProcess.kill("SIGKILL");
+        }, timeoutMs);
+
+        pythonProcess.on("error", (err) => {
+            clearTimeout(timeout);
+            console.error("Failed to start python process:", err);
+            return res.status(500).json({
+                success: false,
+                error: "Failed to start soil AI process",
+                details: err.message
+            });
+        });
 
         // Write input data to stdin
         pythonProcess.stdin.write(inputData);
@@ -248,6 +267,7 @@ router.post("/analyze", async (req, res) => {
         });
 
         pythonProcess.on("close", (code) => {
+            clearTimeout(timeout);
             if (code !== 0) {
                 console.error("Python process exited with error code:", code);
                 console.error("Python error output:", errorOutput);

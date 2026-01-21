@@ -164,9 +164,22 @@ function setLanguage(lang) {
     currentLanguage = lang;
     document.getElementById('html').lang = lang;
     
+    // Update text content
     const elements = document.querySelectorAll('[data-' + lang + ']');
     elements.forEach(element => {
         element.textContent = element.getAttribute('data-' + lang);
+    });
+    
+    // Update placeholders
+    const placeholderElements = document.querySelectorAll('[data-placeholder-' + lang + ']');
+    placeholderElements.forEach(element => {
+        element.placeholder = element.getAttribute('data-placeholder-' + lang);
+    });
+    
+    // Update select options
+    const selectOptions = document.querySelectorAll('select option[data-' + lang + ']');
+    selectOptions.forEach(option => {
+        option.textContent = option.getAttribute('data-' + lang);
     });
     
     const langButtons = document.querySelectorAll('.lang-btn');
