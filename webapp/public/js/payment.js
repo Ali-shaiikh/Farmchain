@@ -270,9 +270,17 @@ async function payWithMethod(method, bookingId, amountINR, days, listingId) {
 
     // 🔹 Init contract
     const contract = new ethers.Contract(contractAddress, abi, signer);
+    console.log("✅ Contract address:", contractAddress);
+
+    const counter = await contract.machineryCounter();
+    console.log("🔢 machineryCounter from blockchain:", counter.toString());
+
 
     // 🔹 Ensure numeric IDs
     const numericListingId = Number(listingId) - 1;
+    console.log("🧾 listingId from backend:", listingId);
+    console.log("🔁 numericListingId used for blockchain:", numericListingId);
+
     console.log("Original listingId:", listingId, "→ Blockchain ID:", numericListingId);
 
     const numericDays = Number(days);
@@ -285,8 +293,10 @@ async function payWithMethod(method, bookingId, amountINR, days, listingId) {
     }
 
     // 🔹 Fetch blockchain price and use it
+    console.log("📡 Fetching machinery from blockchain...");
     const machinery = await contract.machineries(numericListingId);
-    const rentPrice = machinery.rentPrice;
+    console.log("🏗 Machinery fetched:", machinery);
+        const rentPrice = machinery.rentPrice;
 
     // 🔹 Send transaction with blockchain price
     const tx = await contract.rentOrShareMachinery(numericListingId, true, { value: rentPrice });

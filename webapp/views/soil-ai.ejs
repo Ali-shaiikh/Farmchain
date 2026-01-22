@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en" id="html">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title data-en="Soil Report & AI Advisor" data-mr="माती अहवाल व AI सल्लागार">Soil Report & AI Advisor</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Serif+Devanagari:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/speech.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<style>
+  html { scroll-behavior: smooth; }
+  body { font-family: 'Inter', sans-serif; background: #f7f4ed; padding-top: 80px; }
+  [lang="mr"] { font-family: 'Noto Serif Devanagari', sans-serif; }
+  nav { position: fixed; top: 0; left: 0; right: 0; z-index: 50; transition: transform 0.3s ease, opacity 0.2s ease; }
+  nav.nav-hidden { transform: translateY(-120%); opacity: 0; }
+  .video-bg {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: -2;
+  }
+  .video-overlay {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(0,0,0,0.45), rgba(0,100,60,0.35));
+    z-index: -1;
+  }
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen relative">
+  <video class="video-bg" src="/video/vid3.mp4?v=<%= Date.now() %>" autoplay muted loop playsinline></video>
+  <div class="video-overlay"></div>
+
+  <!-- Floating Chat Toggle -->
+  <button id="chatToggle" class="fixed bottom-4 right-4 bg-emerald-600 text-white rounded-full shadow-lg p-3 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-300 z-50" aria-label="Open chat">
+    💬
+  </button>
+
+  <!-- Chat Overlay -->
+  <div id="chatOverlay" class="hidden fixed bottom-20 right-4 w-80 max-w-[90vw] bg-white border border-gray-200 rounded-lg shadow-2xl z-50 flex flex-col">
+    <div class="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-emerald-600 text-white rounded-t-lg">
+      <div class="text-sm font-semibold">कृषी मदत चॅट (Maharashtra)</div>
+      <button id="chatClose" class="text-white hover:text-gray-100 focus:outline-none">✕</button>
+    </div>
+    <div id="chatMessages" class="p-3 space-y-2 h-72 overflow-y-auto text-sm text-gray-800 bg-gray-50"></div>
+    <div class="p-2 border-t border-gray-200 flex gap-2">
+      <input id="chatInput" type="text" class="flex-1 bg-emerald-50/60 backdrop-blur-sm border border-emerald-300/50 rounded-md px-2 py-1 text-sm text-gray-900 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:bg-emerald-50/80" placeholder="Ask about your report or crops..." />
+      <button id="chatSend" class="bg-emerald-600 text-white px-3 py-1 rounded-md text-sm hover:bg-emerald-700 focus:outline-none">Send</button>
+    </div>
+  </div>
+
+<div id="speech-controls" class="speech-controls">
+  <div class="text-sm font-semibold mb-2" data-en="Text-to-Speech" data-mr="मजकूर-ते-भाषण">Text-to-Speech</div>
+  <button id="stop-speech" class="speech-btn" data-en="Stop" data-mr="थांबवा">Stop</button>
+  <button id="pause-speech" class="speech-btn" data-en="Pause" data-mr="विराम">Pause</button>
+  <button id="resume-speech" class="speech-btn" data-en="Resume" data-mr="पुन्हा सुरू">Resume</button>
+</div>
+
+<%- include('partials/header', { showLangSwitch: true }) %>
+
+<div class="container mx-auto p-6 max-w-4xl relative z-10 overflow-y-auto max-h-screen pb-10">
+  <div id="formContainer" class="bg-white/40 backdrop-blur-lg rounded-lg shadow-2xl p-6 mb-6 border border-white/20">
+    <h1 class="text-3xl font-bold text-black mb-2 text-center speakable" data-en="Soil Report & AI Advisor" data-mr="माती अहवाल व AI सल्लागार">
+      Soil Report & AI Advisor
+    </h1>
+    <p class="text-gray-900 text-center mb-6 speakable" data-en="Upload your soil report and get AI-powered recommendations for crops, fertilizers, and equipment." data-mr="आपला माती अहवाल अपलोड करा आणि पिके, खते आणि उपकरणांसाठी AI-आधारित शिफारसी मिळवा.">
+      Upload your soil report and get AI-powered recommendations for crops, fertilizers, and equipment.
+    </p>
+
+    <form id="soilForm" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-black mb-2 speakable" data-en="Soil Report" data-mr="माती अहवाल">
+          Soil Report
+        </label>
+        
+        <!-- File Upload Input -->
+        <div class="mb-3">
+          <label class="block text-sm font-medium text-gray-700 mb-2 speakable" data-en="Upload PDF or Image" data-mr="PDF किंवा प्रतिमा अपलोड करा">
+            Upload PDF or Image (Optional)
+          </label>
+          <input 
+            type="file" 
+            id="fileInput" 
+            accept=".pdf,.jpg,.jpeg,.png"
+            class="w-full bg-emerald-50/60 backdrop-blur-sm border border-emerald-300/50 rounded-lg p-2 text-gray-900 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 focus:bg-emerald-50/80"
+          />
+          <p class="text-xs text-gray-500 mt-1 speakable" data-en="Upload a PDF or image of your soil report. Text will be extracted automatically." data-mr="आपला माती अहवाल PDF किंवा प्रतिमा अपलोड करा. मजकूर आपोआप काढला जाईल.">
+            Upload a PDF or image of your soil report. Text will be extracted automatically.
+          </p>
+          <div id="fileStatus" class="hidden mt-2 text-sm"></div>
+        </div>
+
+        <!-- Textarea (always present as fallback) -->
+        <label class="block text-sm font-medium text-gray-700 mb-2 speakable" data-en="Soil Report Text" data-mr="माती अहवाल मजकूर">
+          Soil Report Text *
+        </label>
+        <input type="hidden" id="reportTextHidden" name="report_text" />
+        <textarea 
+          id="reportTextDisplay" 
+          rows="8" 
+          class="w-full bg-emerald-50/60 backdrop-blur-sm border border-emerald-300/50 rounded-lg p-3 text-gray-900 placeholder-gray-600 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 focus:bg-emerald-50/80"
+          placeholder="Paste your soil report text here, type manually, or upload a file above..."
+        ></textarea>
+        <!-- JSON preview will be shown directly inside the textarea after analysis -->
+        <p class="text-xs text-gray-500 mt-1 speakable" data-en="Paste text manually or upload a file above. Include parameters like pH, Nitrogen, Phosphorus, Potassium, etc." data-mr="मजकूर स्वतः पेस्ट करा किंवा वरील फाइल अपलोड करा. pH, नायट्रोजन, फॉस्फरस, पोटॅशियम इत्यादी पॅरामीटर्स समाविष्ट करा.">
+          Paste text manually or upload a file above. Include parameters like pH, Nitrogen, Phosphorus, Potassium, etc.
+        </p>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2 speakable" data-en="District" data-mr="जिल्हा">
+            District *
+          </label>
+          <select 
+            id="district" 
+            name="district" 
+            class="w-full bg-emerald-50/60 backdrop-blur-sm border border-emerald-300/50 rounded-lg p-3 text-gray-900 focus:ring-2 focus:ring-emerald-500 focus:bg-emerald-50/80"
+            required
+          >
+            <option value="">Select District</option>
+            <% districts.forEach(function(d) { %>
+              <option value="<%= d %>"><%= d %></option>
+            <% }); %>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2 speakable" data-en="Soil Type" data-mr="मातीचा प्रकार">
+            Soil Type
+          </label>
+          <select 
+            id="soilType" 
+            name="soil_type" 
+            class="w-full bg-emerald-50/60 backdrop-blur-sm border border-emerald-300/50 rounded-lg p-3 text-gray-900 focus:ring-2 focus:ring-emerald-500 focus:bg-emerald-50/80"
+          >
+            <option value="">Select Soil Type</option>
+            <% soilTypes.forEach(function(s) { %>
+              <option value="<%= s %>"><%= s %></option>
+            <% }); %>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2 speakable" data-en="Season" data-mr="ऋतू">
+            Season *
+          </label>
+          <select 
+            id="season" 
+            name="season" 
+            class="w-full bg-emerald-50/60 backdrop-blur-sm border border-emerald-300/50 rounded-lg p-3 text-gray-900 focus:ring-2 focus:ring-emerald-500 focus:bg-emerald-50/80"
+            required
+          >
+            <option value="">Select Season</option>
+            <% seasons.forEach(function(s) { %>
+              <option value="<%= s %>" <%= s === 'Kharif' ? 'selected' : '' %>><%= s %></option>
+            <% }); %>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2 speakable" data-en="Irrigation Type" data-mr="सिंचन प्रकार">
+            Irrigation Type *
+          </label>
+          <select 
+            id="irrigationType" 
+            name="irrigation_type" 
+            class="w-full bg-emerald-50/60 backdrop-blur-sm border border-emerald-300/50 rounded-lg p-3 text-gray-900 focus:ring-2 focus:ring-emerald-500 focus:bg-emerald-50/80"
+            required
+          >
+            <option value="">Select Irrigation Type</option>
+            <% irrigationTypes.forEach(function(i) { %>
+              <option value="<%= i %>" <%= i === 'Rain-fed' ? 'selected' : '' %>><%= i %></option>
+            <% }); %>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2 speakable" data-en="Output Language" data-mr="आउटपुट भाषा">
+          Output Language
+        </label>
+        <select 
+          id="language" 
+          name="language" 
+          class="w-full bg-emerald-50/60 backdrop-blur-sm border border-emerald-300/50 rounded-lg p-3 text-gray-900 focus:ring-2 focus:ring-emerald-500 focus:bg-emerald-50/80"
+        >
+          <option value="marathi" <%= lang === 'mr' ? 'selected' : '' %> data-en="Marathi" data-mr="मराठी">Marathi</option>
+          <option value="english" <%= lang === 'en' ? 'selected' : '' %> data-en="English" data-mr="इंग्रजी">English</option>
+        </select>
+      </div>
+
+      <div class="flex gap-3 items-center">
+        <button 
+          type="submit" 
+          class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors speakable" 
+          data-en="Analyze Soil Report" 
+          data-mr="माती अहवाल विश्लेषण करा"
+        >
+          <i data-lucide="microscope" class="w-5 h-5 inline mr-2"></i>
+          Analyze Soil Report
+        </button>
+        <button 
+          id="clearForm"
+          type="button" 
+          class="w-3/10 min-w-[30%] px-3 py-2 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-lg transition-colors speakable" 
+          data-en="Clear" 
+          data-mr="Clear"
+        >
+          Clear
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <div id="results" class="hidden bg-white/40 backdrop-blur-lg rounded-lg shadow-2xl p-6 border border-white/20">
+    <button id="returnToForm" class="mb-4 px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-lg transition-colors speakable" data-en="Return to AI Analyser" data-mr="AI विश्लेषकाकडे परत या">
+      ← Return to AI Analyser
+    </button>
+    <h2 class="text-2xl font-bold text-black mb-4 speakable" data-en="Analysis Results" data-mr="विश्लेषण परिणाम">
+      Analysis Results
+    </h2>
+    <div id="resultsContent" class="space-y-4"></div>
+  </div>
+
+  <div id="loading" class="hidden bg-white/40 backdrop-blur-lg rounded-lg shadow-2xl p-12 border border-white/20 text-center">
+    <div class="inline-block animate-spin rounded-full h-16 w-16 border-b-4 border-emerald-600"></div>
+    <p class="mt-6 text-2xl font-bold text-black speakable" data-en="Analyzing soil report..." data-mr="माती अहवाल विश्लेषण करत आहे...">
+      Analyzing soil report...
+    </p>
+    <p class="mt-2 text-gray-800 speakable" data-en="Please wait while we analyze your report" data-mr="कृपया थांबा आम्ही तुमचा अहवाल विश्लेषण करत आहोत">
+      Please wait while we analyze your report
+    </p>
+  </div>
+
+  <div id="error" class="hidden bg-red-50/60 backdrop-blur-lg border border-red-200/50 rounded-lg p-4 text-red-900 font-semibold"></div>
+</div>
+
+<script src="/js/speech.js"></script>
+<script>
+  lucide.createIcons();
+  
+  document.addEventListener('DOMContentLoaded', function() {
+    window.FarmChainSpeech.setLanguage('<%= typeof lang !== "undefined" && lang ? lang : "en" %>');
+
+    // Hide navbar on downward scroll, show on upward scroll
+    const nav = document.querySelector('nav');
+    let lastScrollY = window.scrollY;
+    window.addEventListener('scroll', () => {
+      if (!nav) return;
+      const current = window.scrollY;
+      if (current > lastScrollY && current > 50) {
+        nav.classList.add('nav-hidden');
+      } else {
+        nav.classList.remove('nav-hidden');
+      }
+      lastScrollY = current;
+    });
+    
+    // Return to form button handler
+    document.getElementById('returnToForm')?.addEventListener('click', function() {
+      document.getElementById('results').classList.add('hidden');
+      document.getElementById('formContainer').classList.remove('hidden');
+      document.getElementById('error').classList.add('hidden');
+
+      // Clear all form fields and text areas
+      const form = document.getElementById('soilForm');
+      form?.reset();
+      const reportTextArea = document.getElementById('reportTextDisplay');
+      if (reportTextArea) {
+        reportTextArea.value = '';
+        reportTextArea.readOnly = false;
+        reportTextArea.placeholder = 'Paste your soil report text here, type manually, or upload a file above...';
+      }
+      const reportHidden = document.getElementById('reportTextHidden');
+      if (reportHidden) reportHidden.value = '';
+    });
+    // Clear button to flush form values
+    document.getElementById('clearForm')?.addEventListener('click', function() {
+      const form = document.getElementById('soilForm');
+      form?.reset();
+      const reportTextArea = document.getElementById('reportTextDisplay');
+      if (reportTextArea) {
+        reportTextArea.value = '';
+        reportTextArea.readOnly = false;
+        reportTextArea.placeholder = 'Paste your soil report text here, type manually, or upload a file above...';
+      }
+      const reportHidden = document.getElementById('reportTextHidden');
+      if (reportHidden) reportHidden.value = '';
+      document.getElementById('error').classList.add('hidden');
+    });
+    
+    // File upload handler
+    const fileInput = document.getElementById('fileInput');
+    const reportTextDisplay = document.getElementById('reportTextDisplay');
+    const reportTextHidden = document.getElementById('reportTextHidden');
+    const fileStatus = document.getElementById('fileStatus');
+    
+    async function maybeAutoAnalyze() {
+      const rtHidden = document.getElementById('reportTextHidden')?.value?.trim();
+      const districtVal = document.getElementById('district')?.value;
+      const seasonVal = document.getElementById('season')?.value;
+      const irrigationVal = document.getElementById('irrigationType')?.value;
+      const languageVal = document.getElementById('language')?.value || 'marathi';
+      const soilTypeVal = document.getElementById('soilType')?.value || '';
+      if (rtHidden && districtVal && seasonVal && irrigationVal) {
+        // Trigger analysis automatically to render JSON values
+        document.getElementById('loading').classList.remove('hidden');
+        document.getElementById('results').classList.add('hidden');
+        document.getElementById('error').classList.add('hidden');
+        try {
+          const response = await fetch('/soil-ai/api/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              report_text: rtHidden,
+              district: districtVal,
+              soil_type: soilTypeVal,
+              season: seasonVal,
+              irrigation_type: irrigationVal,
+              language: languageVal
+            })
+          });
+          const data = await response.json();
+          document.getElementById('loading').classList.add('hidden');
+          if (!data.success) {
+            throw new Error(data.error || 'Analysis failed');
+          }
+          // Show JSON in Soil Report Text section and standard results
+          // Values-only JSON will be populated by displayResults
+          const resultsDiv = document.getElementById('results');
+          if (resultsDiv) resultsDiv.classList.remove('hidden');
+          displayResults(data);
+        } catch (err) {
+          document.getElementById('loading').classList.add('hidden');
+          document.getElementById('error').classList.remove('hidden');
+          document.getElementById('error').textContent = 'Error: ' + err.message;
+        }
+      }
+    }
+
+    fileInput.addEventListener('change', async function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      fileStatus.classList.remove('hidden');
+      fileStatus.className = 'mt-2 text-sm text-blue-600';
+      fileStatus.textContent = 'Extracting text from file...';
+      
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      try {
+        const response = await fetch('/soil-ai/api/extract', {
+          method: 'POST',
+          body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.text) {
+          // Store extracted text internally without displaying raw OCR
+          reportTextHidden.value = data.text;
+          if (reportTextDisplay) {
+            reportTextDisplay.value = '';
+            reportTextDisplay.placeholder = 'Text captured from file (hidden).';
+          }
+          fileStatus.className = 'mt-2 text-sm text-green-600';
+          fileStatus.textContent = '✓ Text captured for analysis. Select District to preview values.';
+          // Auto-analysis disabled; user will click Analyze
+        } else {
+          fileStatus.className = 'mt-2 text-sm text-red-600';
+          fileStatus.textContent = 'Error: ' + (data.error || 'Failed to extract text');
+        }
+      } catch (error) {
+        fileStatus.className = 'mt-2 text-sm text-red-600';
+        fileStatus.textContent = 'Error: ' + error.message;
+      }
+    });
+
+    // Auto-run on field change disabled to avoid premature submissions
+  });
+
+  document.getElementById('soilForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const reportTextValue = (document.getElementById('reportTextHidden')?.value || document.getElementById('reportTextDisplay')?.value || '').trim();
+    if (!reportTextValue) {
+      document.getElementById('error').classList.remove('hidden');
+      document.getElementById('error').textContent = 'Error: Soil report text is required (from upload or manual entry).';
+      return;
+    }
+    
+    const formData = {
+      report_text: reportTextValue,
+      district: document.getElementById('district').value,
+      soil_type: document.getElementById('soilType').value,
+      season: document.getElementById('season').value,
+      irrigation_type: document.getElementById('irrigationType').value,
+      language: document.getElementById('language').value
+    };
+
+    // Show loading, hide results/error/form
+    document.getElementById('formContainer').classList.add('hidden');
+    document.getElementById('loading').classList.remove('hidden');
+    document.getElementById('results').classList.add('hidden');
+    document.getElementById('error').classList.add('hidden');
+
+    try {
+      const response = await fetch('/soil-ai/api/analyze', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+      });
+
+      const data = await response.json();
+
+      document.getElementById('loading').classList.add('hidden');
+
+      if (!data.success) {
+        throw new Error(data.error || 'Analysis failed');
+      }
+
+      // After analysis, show values-only JSON in the Soil Report Text area
+      const reportTextArea = document.getElementById('reportTextDisplay');
+      if (reportTextArea) {
+        const clean = data.clean_values || {};
+        const soilProfile = data.soil_profile || {};
+        const extracted = data.extracted_parameters || {};
+        const valOr = (primary, fallback) => {
+          if (primary !== undefined && primary !== null && primary !== '') return primary;
+          return fallback;
+        };
+        const pHCat = valOr(clean.pH_category, soilProfile.pH?.category);
+        const nCat = valOr(clean.Nitrogen_category, soilProfile.Nitrogen?.category || extracted.Nitrogen?.category || extracted.Nitrogen?.category_hint);
+        const pVal = valOr(clean.Phosphorus_value, extracted.Phosphorus?.value);
+        const kVal = valOr(clean.Potassium_value, extracted.Potassium?.value);
+        const ocCat = valOr(clean.OrganicCarbon_category, soilProfile['Organic Carbon']?.category || extracted.OrganicCarbon?.category);
+        const jsonValuesTab = {
+          pH: pHCat || null,
+          Nitrogen: nCat || null,
+          Phosphorus: pVal ?? null,
+          Potassium: kVal ?? null,
+          OrganicCarbon: ocCat || null
+        };
+        reportTextArea.value = JSON.stringify(jsonValuesTab, null, 2);
+        reportTextArea.readOnly = true;
+        reportTextArea.placeholder = 'Structured Values (JSON)';
+      }
+
+      // Show results and display content, keep form hidden
+      const resultsDiv = document.getElementById('results');
+      if (resultsDiv) {
+        resultsDiv.classList.remove('hidden');
+      }
+      document.getElementById('formContainer').classList.add('hidden');
+      
+      displayResults(data);
+    } catch (error) {
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('formContainer').classList.remove('hidden');
+      document.getElementById('error').classList.remove('hidden');
+      document.getElementById('error').textContent = 'Error: ' + error.message;
+    }
+  });
+
+  let latestAnalysis = null;
+
+  function appendChatMessage(role, text) {
+    const wrap = document.createElement('div');
+    wrap.className = role === 'user' ? 'text-right' : 'text-left';
+    const bubble = document.createElement('div');
+    bubble.className = role === 'user'
+      ? 'inline-block bg-emerald-600 text-white px-3 py-2 rounded-lg text-sm'
+      : 'inline-block bg-white border border-gray-200 px-3 py-2 rounded-lg text-sm text-gray-800';
+    bubble.textContent = text;
+    wrap.appendChild(bubble);
+    const msgBox = document.getElementById('chatMessages');
+    if (msgBox) {
+      msgBox.appendChild(wrap);
+      msgBox.scrollTop = msgBox.scrollHeight;
+    }
+  }
+
+  async function sendChat() {
+    const input = document.getElementById('chatInput');
+    if (!input) return;
+    const question = input.value.trim();
+    if (!question) return;
+    input.value = '';
+    appendChatMessage('user', question);
+
+    const selectedLanguage = document.getElementById('language')?.value || 'english';
+
+    const context = latestAnalysis ? JSON.stringify({
+      summary: latestAnalysis.explanation?.summary,
+      advisory: latestAnalysis.explanation?.advisory,
+      crops: latestAnalysis.recommendations?.crop_recommendation?.primary,
+      fertilizer_plan: latestAnalysis.recommendations?.fertilizer_plan,
+      equipment_plan: latestAnalysis.recommendations?.equipment_plan,
+      soil_profile: latestAnalysis.soil_profile
+    }) : '';
+
+    try {
+      const res = await fetch('/soil-ai/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: question, context, language: selectedLanguage })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Chat failed');
+      appendChatMessage('assistant', data.reply || '');
+    } catch (err) {
+      appendChatMessage('assistant', 'Sorry, I could not respond right now.');
+      console.error(err);
+    }
+  }
+
+  // Chat UI wiring
+  const chatToggle = document.getElementById('chatToggle');
+  const chatOverlay = document.getElementById('chatOverlay');
+  const chatClose = document.getElementById('chatClose');
+  const chatSend = document.getElementById('chatSend');
+  const chatInput = document.getElementById('chatInput');
+
+  if (chatToggle && chatOverlay) {
+    chatToggle.addEventListener('click', () => {
+      chatOverlay.classList.toggle('hidden');
+      if (!chatOverlay.classList.contains('hidden')) {
+        chatInput?.focus();
+      }
+    });
+  }
+  chatClose?.addEventListener('click', () => chatOverlay.classList.add('hidden'));
+  chatSend?.addEventListener('click', sendChat);
+  chatInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') sendChat();
+  });
+
+  function displayResults(data) {
+    latestAnalysis = data || null;
+    const container = document.getElementById('resultsContent');
+    if (!container) return;
+    
+    // Build complete HTML including explanation FIRST, then recommendations
+    let html = '';
+
+    // STRUCTURED VALUES (no raw OCR text)
+    const clean = data.clean_values || {};
+    const soilProfile = data.soil_profile || {};
+    const extracted = data.extracted_parameters || {};
+
+    const valOr = (primary, fallback) => {
+      if (primary !== undefined && primary !== null && primary !== '') return primary;
+      return fallback;
+    };
+
+    const pHCat = valOr(clean.pH_category, soilProfile.pH?.category);
+    const nCat = valOr(clean.Nitrogen_category, soilProfile.Nitrogen?.category || extracted.Nitrogen?.category || extracted.Nitrogen?.category_hint);
+    const pVal = valOr(clean.Phosphorus_value, extracted.Phosphorus?.value);
+    const pUnit = valOr(clean.Phosphorus_unit, extracted.Phosphorus?.unit || (pVal ? 'kg/ha' : ''));
+    const kVal = valOr(clean.Potassium_value, extracted.Potassium?.value);
+    const kUnit = valOr(clean.Potassium_unit, extracted.Potassium?.unit || (kVal ? 'kg/ha' : ''));
+    const ocCat = valOr(clean.OrganicCarbon_category, soilProfile['Organic Carbon']?.category || extracted.OrganicCarbon?.category);
+
+    // Render the JSON inside the Soil Report Text textarea
+    const reportTextAreaAfter = document.getElementById('reportTextDisplay');
+    if (reportTextAreaAfter) {
+      const jsonValuesTab = {
+        pH: pHCat || null,
+        Nitrogen: nCat || null,
+        Phosphorus: pVal ?? null,
+        Potassium: kVal ?? null,
+        OrganicCarbon: ocCat || null
+      };
+      reportTextAreaAfter.value = JSON.stringify(jsonValuesTab, null, 2);
+      reportTextAreaAfter.readOnly = true;
+      reportTextAreaAfter.placeholder = 'Structured Values (JSON)';
+    }
+
+    html += `
+      <div class="bg-white border border-gray-200 rounded-lg p-4 mb-4">
+        <h3 class="font-semibold text-gray-800 mb-3">Parsed Soil Values</h3>
+        <div class="grid md:grid-cols-2 gap-3 text-sm text-gray-700">
+          <div><strong>pH:</strong> ${escapeHtml(pHCat || 'N/A')}</div>
+          <div><strong>Nitrogen:</strong> ${escapeHtml(nCat || 'N/A')}</div>
+          <div><strong>Phosphorus:</strong> ${pVal !== undefined && pVal !== null ? escapeHtml(String(pVal) + (pUnit ? ' ' + pUnit : '')) : 'N/A'}</div>
+          <div><strong>Potassium:</strong> ${kVal !== undefined && kVal !== null ? escapeHtml(String(kVal) + (kUnit ? ' ' + kUnit : '')) : 'N/A'}</div>
+          <div><strong>Organic Carbon:</strong> ${escapeHtml(ocCat || 'N/A')}</div>
+        </div>
+      </div>
+    `;
+    
+    // EXPLANATION SECTION - ALWAYS FIRST
+    if (data.explanation && data.explanation.summary) {
+      const summaryText = data.explanation.summary;
+      html += `
+        <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4">
+          <h3 class="font-semibold text-emerald-800 mb-3">AI Recommendations</h3>
+          <div class="mb-4">
+            <h4 class="font-semibold text-gray-800 mb-2">Summary</h4>
+            <div class="text-gray-700 whitespace-pre-wrap leading-relaxed">${escapeHtml(summaryText)}</div>
+          </div>
+      `;
+      
+      // ALWAYS show advisory below Summary (it's always generated now)
+      const advisoryText = data.explanation.advisory || '';
+      if (advisoryText.trim()) {
+        html += `
+          <div class="mt-4 pt-4 border-t border-emerald-300">
+            <h4 class="font-semibold text-gray-800 mb-2">Advisory</h4>
+            <div class="text-gray-700 whitespace-pre-wrap leading-relaxed">${escapeHtml(advisoryText)}</div>
+          </div>
+        `;
+      }
+      
+      if (data.explanation.disclaimer) {
+        html += `<div class="text-sm text-gray-600 mt-4 p-3 bg-yellow-50 border-l-4 border-yellow-400 italic">${escapeHtml(data.explanation.disclaimer)}</div>`;
+      }
+      
+      html += `</div>`;
+    }
+
+    // DETAILED AI SECTIONS (collapsible)
+    const detailed = data.ai_detailed_analysis || {};
+    const sections = [
+      { key: 'SoilHealthInterpretation', title: '🌱 Soil Health Interpretation' },
+      { key: 'CropSuitability', title: '🌾 Crop Suitability Explanation' },
+      { key: 'CropExclusionReasons', title: '🚫 Crop Exclusion Reasons' },
+      { key: 'RiskWarnings', title: '⚠️ Risk & Warning Notes' },
+      { key: 'FertilizerGuidance', title: '💊 Fertilizer Usage Guidance' },
+      { key: 'EquipmentExplanation', title: '🚜 Equipment Usage Explanation' },
+      { key: 'SeasonalTiming', title: '⏱️ Seasonal Timing Guidance' },
+      { key: 'LongTermImprovement', title: '🌿 Long-term Soil Improvement Tips' },
+      { key: 'ConfidenceNote', title: '🔎 Confidence & Data Quality Note' }
+    ];
+
+    if (Object.keys(detailed).length > 0) {
+      html += '<div class="space-y-3">';
+      for (const s of sections) {
+        const content = detailed[s.key];
+        if (!content) continue;
+        html += `
+          <details class="bg-white border border-gray-200 rounded-lg p-4">
+            <summary class="cursor-pointer font-semibold text-gray-800">${escapeHtml(s.title)}</summary>
+            <div class="mt-2 text-gray-700 whitespace-pre-wrap">${escapeHtml(typeof content === 'string' ? content : Array.isArray(content) ? content.join('\n') : '')}</div>
+          </details>
+        `;
+      }
+
+      // Farmer Action Checklist (list)
+      if (Array.isArray(detailed.FarmerActionChecklist) && detailed.FarmerActionChecklist.length > 0) {
+        const items = detailed.FarmerActionChecklist.map(item => `<li class="flex items-start"><span class="mr-2">✅</span><span>${escapeHtml(item)}</span></li>`).join('');
+        html += `
+          <div class="bg-white border border-gray-200 rounded-lg p-4">
+            <h4 class="font-semibold text-gray-800 mb-2">✅ Farmer Action Checklist</h4>
+            <ul class="space-y-1 text-gray-700">${items}</ul>
+          </div>
+        `;
+      }
+      html += '</div>';
+    }
+    
+    // RECOMMENDATIONS SECTION - AFTER EXPLANATION
+    if (data.recommendations) {
+      // Determine if output should be in Marathi
+      const isMarathi = data.language && (data.language.toLowerCase().includes('marathi') || data.language.includes('मराठी'));
+      
+      // Translation helper
+      const t = (key) => {
+        const translations = {
+          'Detailed Recommendations': isMarathi ? 'विस्तृत शिफारसी' : 'Detailed Recommendations',
+          'Crop Recommendations': isMarathi ? 'फसल शिफारसी' : 'Crop Recommendations',
+          'Primary Crops': isMarathi ? 'प्राथमिक फसलें' : 'Primary Crops',
+          'Season': isMarathi ? 'मौसम' : 'Season',
+          'Duration': isMarathi ? 'अवधि' : 'Duration',
+          'Fertilizer Plan': isMarathi ? 'खाद योजना' : 'Fertilizer Plan',
+          'Equipment Plan': isMarathi ? 'उपकरण योजना' : 'Equipment Plan',
+          'Fertilizers': isMarathi ? 'खादें' : 'Fertilizers',
+          'Stages': isMarathi ? 'चरण' : 'Stages',
+          'land_preparation': isMarathi ? 'जमीन की तैयारी' : 'Land Preparation',
+          'sowing': isMarathi ? 'बीजबोवन' : 'Sowing',
+          'irrigation': isMarathi ? 'सिंचाई' : 'Irrigation',
+          'spraying': isMarathi ? 'छिड़काव' : 'Spraying',
+          'harvesting': isMarathi ? 'फसल कटाई' : 'Harvesting'
+        };
+        return translations[key] || key;
+      };
+      
+      html += `<h3 class="font-semibold text-gray-800 mb-4 mt-4">${t('Detailed Recommendations')}</h3>`;
+      
+      // Crop Recommendations
+      if (data.recommendations.crop_recommendation) {
+        const crop = data.recommendations.crop_recommendation;
+        let durationHTML = '';
+        
+        if (crop.crop_durations && typeof crop.crop_durations === 'object') {
+          durationHTML = Object.entries(crop.crop_durations).map(([cropName, duration]) => 
+            `<p class="text-sm"><strong>${escapeHtml(cropName)}:</strong> ${escapeHtml(duration)}</p>`
+          ).join('');
+        } else if (crop.duration_days) {
+          durationHTML = `<p><strong>${t('Duration')}:</strong> ${escapeHtml(crop.duration_days)} days</p>`;
+        } else {
+          durationHTML = `<p><strong>${t('Duration')}:</strong> N/A</p>`;
+        }
+        
+        html += `
+          <div class="bg-white border border-gray-200 rounded-lg p-4 mb-4">
+            <h4 class="font-semibold text-gray-800 mb-2">🌾 ${t('Crop Recommendations')}</h4>
+            <p><strong>${t('Primary Crops')}:</strong> ${crop.primary ? crop.primary.map(escapeHtml).join(', ') : 'N/A'}</p>
+            <p><strong>${t('Season')}:</strong> ${escapeHtml(crop.season || 'N/A')}</p>
+            <div class="mt-2"><strong>${t('Duration')}:</strong> ${durationHTML}</div>
+          </div>
+        `;
+      }
+      
+      // Fertilizer Plan
+      if (data.recommendations.fertilizer_plan) {
+        html += `
+          <div class="bg-white border border-gray-200 rounded-lg p-4 mb-4">
+            <h4 class="font-semibold text-gray-800 mb-2">💊 ${t('Fertilizer Plan')}</h4>
+            ${Object.entries(data.recommendations.fertilizer_plan).map(([nutrient, plan]) => `
+              <div class="mb-2">
+                <strong>${nutrient}:</strong> ${plan.recommended_range || 'N/A'}<br>
+                <span class="text-sm text-gray-600">${t('Fertilizers')}: ${plan.fertilizers ? plan.fertilizers.join(', ') : 'N/A'}</span><br>
+                <span class="text-sm text-gray-600">${t('Stages')}: ${plan.application_stages ? plan.application_stages.join(', ') : 'N/A'}</span>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+      
+      // Equipment Plan
+      if (data.recommendations.equipment_plan) {
+        html += `
+          <div class="bg-white border border-gray-200 rounded-lg p-4 mb-4">
+            <h4 class="font-semibold text-gray-800 mb-2">🚜 ${t('Equipment Plan')}</h4>
+            ${Object.entries(data.recommendations.equipment_plan).map(([stage, equipment]) => `
+              <div class="mb-2">
+                <strong>${t(stage)}:</strong> ${Array.isArray(equipment) ? equipment.join(', ') : equipment}
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+    }
+    
+    // Set all HTML at once - explanation first, then recommendations
+    container.innerHTML = html;
+  }
+  
+  // Helper function to escape HTML (prevent XSS)
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+</script>
+</body>
+</html>

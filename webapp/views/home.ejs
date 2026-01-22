@@ -105,18 +105,36 @@
       <div class="flex flex-col md:flex-row gap-4 justify-center">
         <% if (typeof user !== 'undefined' && user) { %>
           <% if (user.role === "farmer") { %>
-            <a href="/farmer" class="btn speakable" data-en="Farmer Dashboard" data-mr="शेतकरी डॅशबोर्ड">Farmer Dashboard <i data-lucide="tractor" class="w-5 h-5"></i></a>
+            <a href="/farmer" class="btn speakable">Farmer Dashboard</a>
           <% } else if (user.role === "seller") { %>
-            <a href="/seller" class="btn speakable" data-en="Seller Dashboard" data-mr="विक्रेता डॅशबोर्ड">Seller Dashboard <i data-lucide="users" class="w-5 h-5"></i></a>
+            <a href="/seller" class="btn speakable">Seller Dashboard</a>
           <% } else if (user.role === "admin") { %>
-            <a href="/admin" class="btn speakable" data-en="Admin Dashboard" data-mr="प्रशासक डॅशबोर्ड">Admin Dashboard <i data-lucide="settings" class="w-5 h-5"></i></a>
+            <a href="/admin" class="btn speakable">Admin Dashboard</a>
           <% } %>
+      
+          <!-- ✅ Soil AI button for logged-in users -->
+          <a href="/soil-ai" class="btn speakable"
+             data-en="Soil Report & AI Advisor"
+             data-mr="माती अहवाल व AI सल्लागार">
+            Soil Report & AI Advisor
+            <i data-lucide="microscope" class="w-5 h-5"></i>
+          </a>
+      
         <% } else { %>
-          <a href="/auth/login/farmer" class="btn speakable" data-en="Farmer Portal" data-mr="शेतकरी पोर्टल">Farmer Portal <i data-lucide="tractor" class="w-5 h-5"></i></a>
-          <a href="/auth/login/seller" class="btn speakable" data-en="Seller Portal" data-mr="विक्रेता पोर्टल">Seller Portal <i data-lucide="users" class="w-5 h-5"></i></a>
-          <a href="/auth/login/admin" class="btn speakable" data-en="Admin Portal" data-mr="प्रशासक पोर्टल">Admin Portal <i data-lucide="settings" class="w-5 h-5"></i></a>
+          <a href="/auth/login/farmer" class="btn speakable">Farmer Portal</a>
+          <a href="/auth/login/seller" class="btn speakable">Seller Portal</a>
+          <a href="/auth/login/admin" class="btn speakable">Admin Portal</a>
+      
+          <!-- ✅ Soil AI button for guests -->
+          <a href="/soil-ai" class="btn speakable"
+             data-en="Soil Report & AI Advisor"
+             data-mr="माती अहवाल व AI सल्लागार">
+            Soil Report & AI Advisor
+            <i data-lucide="microscope" class="w-5 h-5"></i>
+          </a>
         <% } %>
       </div>
+      
     </div>
   </section>
 
